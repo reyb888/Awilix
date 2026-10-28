@@ -43,8 +43,6 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
   const markersRef = useRef([]);
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
-  const sunSpriteRef = useRef(null);
-  const earthSpriteRef = useRef(null);
   const sunRayRef = useRef(null);
   const earthRayRef = useRef(null);
   const earthMeshRef = useRef(null);
@@ -174,39 +172,6 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     sunLight.shadow.bias = -0.0005;
     scene.add(sunLight);
     sunLightRef.current = sunLight;
-
-    // Billboard Sprites for distant view navigation
-    const sunCanvas = document.createElement('canvas');
-    sunCanvas.width = 64; sunCanvas.height = 64;
-    const sunCtx = sunCanvas.getContext('2d');
-    const sunGrad = sunCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    sunGrad.addColorStop(0, '#ffffaa');
-    sunGrad.addColorStop(0.3, '#ffcc00');
-    sunGrad.addColorStop(0.7, '#ff8800');
-    sunGrad.addColorStop(1, 'rgba(255,100,0,0)');
-    sunCtx.fillStyle = sunGrad;
-    sunCtx.fillRect(0, 0, 64, 64);
-    const sunTexture = new THREE.CanvasTexture(sunCanvas);
-    const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTexture, sizeAttenuation: false, depthTest: false }));
-    sunSprite.scale.set(0.12, 0.12, 1);
-    scene.add(sunSprite);
-    sunSpriteRef.current = sunSprite;
-
-    const earthCanvas = document.createElement('canvas');
-    earthCanvas.width = 64; earthCanvas.height = 64;
-    const earthCtx = earthCanvas.getContext('2d');
-    const earthGrad = earthCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    earthGrad.addColorStop(0, '#99ddff');
-    earthGrad.addColorStop(0.4, '#3b82f6');
-    earthGrad.addColorStop(0.8, '#1e3a8a');
-    earthGrad.addColorStop(1, 'rgba(30,58,138,0)');
-    earthCtx.fillStyle = earthGrad;
-    earthCtx.fillRect(0, 0, 64, 64);
-    const earthTexture = new THREE.CanvasTexture(earthCanvas);
-    const earthSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: earthTexture, sizeAttenuation: false, depthTest: false }));
-    earthSprite.scale.set(0.09, 0.09, 1);
-    scene.add(earthSprite);
-    earthSpriteRef.current = earthSprite;
 
     const gltfLoader = new GLTFLoader();
 
@@ -380,12 +345,8 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         sunMeshRef.current.rotation.y += 0.0003;
       }
 
-      const camDist = camera.position.length();
-      const show3D = camDist > 4.5;
       if (earthMeshRef.current) earthMeshRef.current.visible = true;
       if (sunMeshRef.current) sunMeshRef.current.visible = true;
-      if (sunSpriteRef.current) sunSpriteRef.current.visible = !show3D;
-      if (earthSpriteRef.current) earthSpriteRef.current.visible = !show3D;
 
       renderer.render(scene, camera);
     };
@@ -432,9 +393,6 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
       if (sunMeshRef.current) {
         sunMeshRef.current.position.set(dirSun.x * SUN_DIST, dirSun.y * SUN_DIST, dirSun.z * SUN_DIST);
       }
-      if (sunSpriteRef.current) {
-        sunSpriteRef.current.position.set(dirSun.x * 7.0, dirSun.y * 7.0, dirSun.z * 7.0);
-      }
 
       // Earth Vector from Moon center (Geocentric Earth is at -moonVec)
       const dEarth = { x: -moonVec.x, y: -moonVec.y, z: -moonVec.z };
@@ -444,9 +402,6 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
       // Earth 3D Model position with real 3.67x scale
       if (earthMeshRef.current) {
         earthMeshRef.current.position.set(dirEarth.x * EARTH_DIST, dirEarth.y * EARTH_DIST, dirEarth.z * EARTH_DIST);
-      }
-      if (earthSpriteRef.current) {
-        earthSpriteRef.current.position.set(dirEarth.x * 7.0, dirEarth.y * 7.0, dirEarth.z * 7.0);
       }
 
       // Light Rays
