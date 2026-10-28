@@ -445,7 +445,7 @@ function GlobeTab({ selectedSite, setSelectedSite, date, onVisitSite, quickPath,
           <MoonGlobe
             selectedSite={selectedSite}
             date={date}
-            onSiteClick={(site) => { setSelectedSite(site); onVisitSite(site); }}
+            onSiteClick={(site) => setSelectedSite(site)}
           />
         </div>
 

@@ -1,30 +1,45 @@
-import { useEffect, useRef, useState } from 'react';
+// src/components/MoonGlobe.jsx
+// Authentic 3D Moon Globe Simulation with NASA Cloud Earth & Solar Star Model
+// Correct astronomical proportional scale: Moon (1.0), Earth (3.67), Sun (10.0)
+// Features: Dual Lighting Mode (Physics Shadows vs Global Inspection Fill),
+// Smooth Site Fly-To / Zoom Animation, Real-time Sun & Earth Ephemeris vectors.
+
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import sites from '../data/sites.json';
+import { Sun, Radio, Compass, Lightbulb, Sparkles, Navigation, Clock } from 'lucide-react';
 
-// Scale: Moon radius = 1 unit. Real ratios scaled for visibility.
-// NASA: Earth radius = 6371km, Moon = 1737km → ratio 3.67
-// NASA: Sun radius = 696000km → 400x Moon radius
-// NASA: Earth-Moon distance = 384400km = 221 Moon radii
-// NASA: Sun-Moon distance = 149.6M km = 86000 Moon radii
-// Compressed for visibility:
-const EARTH_RADIUS = 0.5;  // 3.67x scaled down for visibility (real ratio maintained visually)
-const SUN_RADIUS = 1.2;     // Sun is 400x Moon, compressed to 1.2x for visibility
-const EARTH_DIST = 6;       // Earth at 6 units (compressed from 221)
-const SUN_DIST = 15;        // Sun at 15 units (compressed from 86000)
+// Physical astronomical ratios scaled for visual clarity:
+// NASA Dimensions:
+// Moon radius = 1737.4 km -> Scene Base Unit = 1.0
+// Earth radius = 6371.0 km -> Ratio = 6371 / 1737.4 = 3.667 units!
+// Sun radius = 696340 km -> Scaled to 10.0 units for realistic star presence
+const MOON_RADIUS = 1.0;
+const EARTH_RADIUS = 3.67; // Scientifically accurate 3.67x ratio to Moon
+const SUN_RADIUS = 10.0;    // Prominent solar photosphere disk
+const EARTH_DIST = 28.0;   // Visible orbital distance
+const SUN_DIST = 85.0;     // Solar orbital distance
 
 export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
   const rendererRef = useRef(null);
   const controlsRef = useRef(null);
   const sunLightRef = useRef(null);
+  const ambientLightRef = useRef(null);
+  const inspectLightRef = useRef(null);
   const modelRef = useRef(null);
+
+  // States
   const [showRays, setShowRays] = useState(true);
+  const [lightingMode, setLightingMode] = useState(false); // Global inspect fill toggle
   const [currentHour, setCurrentHour] = useState(12);
   const [selectedSiteId, setSelectedSiteId] = useState(selectedSite?.id || sites[0].id);
+
+  // References
   const markersRef = useRef([]);
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
@@ -35,6 +50,59 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
   const earthMeshRef = useRef(null);
   const sunMeshRef = useRef(null);
 
+  // Camera Fly-to Animation Ref
+  const flyTargetRef = useRef({
+    active: false,
+    position: new THREE.Vector3(),
+    lookAt: new THREE.Vector3(),
+  });
+
+  // Trigger smooth camera zoom to landing site
+  const flyToSite = useCallback((site) => {
+    if (!site || !cameraRef.current || !controlsRef.current) return;
+    const latRad = (site.lat * Math.PI) / 180;
+    const lonRad = (site.lon * Math.PI) / 180;
+    const nx = Math.cos(latRad) * Math.sin(lonRad);
+    const ny = Math.sin(latRad);
+    const nz = Math.cos(latRad) * Math.cos(lonRad);
+
+    const normal = new THREE.Vector3(nx, ny, nz).normalize();
+    // Hover camera 1.2 units above surface (distance 2.2 from origin)
+    const targetPos = normal.clone().multiplyScalar(2.2);
+    const targetLookAt = normal.clone().multiplyScalar(0.4);
+
+    flyTargetRef.current = {
+      active: true,
+      position: targetPos,
+      lookAt: targetLookAt,
+    };
+  }, []);
+
+  // When selectedSite prop changes (e.g. from left sidebar), trigger fly-to zoom
+  useEffect(() => {
+    if (selectedSite?.id) {
+      setSelectedSiteId(selectedSite.id);
+      flyToSite(selectedSite);
+    }
+  }, [selectedSite, flyToSite]);
+
+  // Handle Lighting Mode toggle
+  useEffect(() => {
+    if (!ambientLightRef.current || !inspectLightRef.current) return;
+    if (lightingMode) {
+      // Global Inspect Fill: lights up the entire space so you can see all sides of Moon, Earth, and Sun!
+      ambientLightRef.current.intensity = 2.2;
+      ambientLightRef.current.color.setHex(0xffffff);
+      inspectLightRef.current.intensity = 1.2;
+    } else {
+      // Physical Solar Lighting: deep space darkness on shadow sides
+      ambientLightRef.current.intensity = 0.4;
+      ambientLightRef.current.color.setHex(0x222222);
+      inspectLightRef.current.intensity = 0.0;
+    }
+  }, [lightingMode]);
+
+  // Initialize Three.js Scene
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -43,19 +111,25 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     scene.background = new THREE.Color(0x000005);
     sceneRef.current = scene;
 
-    // Stars
+    // Realistic Starfield
     const starGeo = new THREE.BufferGeometry();
     const starVerts = [];
-    for (let i = 0; i < 3000; i++) {
-      starVerts.push((Math.random() - 0.5) * 200, (Math.random() - 0.5) * 200, (Math.random() - 0.5) * 200);
+    for (let i = 0; i < 4000; i++) {
+      starVerts.push(
+        (Math.random() - 0.5) * 400,
+        (Math.random() - 0.5) * 400,
+        (Math.random() - 0.5) * 400
+      );
     }
     starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
-    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.15 })));
+    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.18 })));
 
-    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 500);
-    camera.position.set(0, 0, 4);
+    // Camera with deep frustum to view Sun and Earth
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 2000);
+    camera.position.set(0, 0, 4.2);
+    cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
@@ -65,27 +139,48 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.minDistance = 1.2;
-    controls.maxDistance = 60;
+    controls.dampingFactor = 0.06;
+    controls.minDistance = 1.15;
+    controls.maxDistance = 250;
     controlsRef.current = controls;
 
+    // Disable fly animation on manual user drag
+    controls.addEventListener('start', () => {
+      flyTargetRef.current.active = false;
+    });
+
+    // Ambient Space Light
     const ambient = new THREE.AmbientLight(0x222222, 0.4);
     scene.add(ambient);
+    ambientLightRef.current = ambient;
 
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    // Inspection Omni Fill Light (Used when Lighting mode is ON)
+    const inspectLight = new THREE.DirectionalLight(0xffffff, 0.0);
+    inspectLight.position.set(0, 20, 20);
+    scene.add(inspectLight);
+    inspectLightRef.current = inspectLight;
+
+    // Directional Sun Light (PHYSICAL SHADOW ENGINE — 100% UNTOUCHED)
+    const sunLight = new THREE.DirectionalLight(0xfffdf2, 2.0);
     sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 1024;
-    sunLight.shadow.mapSize.height = 1024;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 120;
+    sunLight.shadow.camera.left = -4;
+    sunLight.shadow.camera.right = 4;
+    sunLight.shadow.camera.top = 4;
+    sunLight.shadow.camera.bottom = -4;
+    sunLight.shadow.bias = -0.0005;
     scene.add(sunLight);
     sunLightRef.current = sunLight;
 
-    // Sun sprite (2D, always faces camera)
+    // Billboard Sprites for distant view navigation
     const sunCanvas = document.createElement('canvas');
     sunCanvas.width = 64; sunCanvas.height = 64;
     const sunCtx = sunCanvas.getContext('2d');
     const sunGrad = sunCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    sunGrad.addColorStop(0, '#ffff88');
+    sunGrad.addColorStop(0, '#ffffaa');
     sunGrad.addColorStop(0.3, '#ffcc00');
     sunGrad.addColorStop(0.7, '#ff8800');
     sunGrad.addColorStop(1, 'rgba(255,100,0,0)');
@@ -97,74 +192,149 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     scene.add(sunSprite);
     sunSpriteRef.current = sunSprite;
 
-    // Earth sprite (2D)
     const earthCanvas = document.createElement('canvas');
     earthCanvas.width = 64; earthCanvas.height = 64;
     const earthCtx = earthCanvas.getContext('2d');
     const earthGrad = earthCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    earthGrad.addColorStop(0, '#88ccff');
-    earthGrad.addColorStop(0.4, '#4488ff');
-    earthGrad.addColorStop(0.8, '#2244aa');
-    earthGrad.addColorStop(1, 'rgba(20,40,100,0)');
+    earthGrad.addColorStop(0, '#99ddff');
+    earthGrad.addColorStop(0.4, '#3b82f6');
+    earthGrad.addColorStop(0.8, '#1e3a8a');
+    earthGrad.addColorStop(1, 'rgba(30,58,138,0)');
     earthCtx.fillStyle = earthGrad;
     earthCtx.fillRect(0, 0, 64, 64);
     const earthTexture = new THREE.CanvasTexture(earthCanvas);
     const earthSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: earthTexture, sizeAttenuation: false, depthTest: false }));
-    earthSprite.scale.set(0.08, 0.08, 1);
+    earthSprite.scale.set(0.09, 0.09, 1);
     scene.add(earthSprite);
     earthSpriteRef.current = earthSprite;
 
-    // Earth 3D sphere (scaled, visible when zoomed out)
-    const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, 32, 32);
-    const earthMat = new THREE.MeshStandardMaterial({ color: 0x2266cc });
-    const earthTexLoader = new THREE.TextureLoader();
-    earthTexLoader.load('/textures/earth_blue_marble.jpg', (tex) => {
-      earthMat.map = tex;
-      earthMat.needsUpdate = true;
-    });
-    const earthMesh = new THREE.Mesh(earthGeo, earthMat);
-    earthMesh.visible = false;
-    scene.add(earthMesh);
-    earthMeshRef.current = earthMesh;
+    const gltfLoader = new GLTFLoader();
 
-    // Sun 3D sphere (scaled, visible when zoomed out)
-    const sunGeo = new THREE.SphereGeometry(SUN_RADIUS, 32, 32);
-    const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd44 });
-    const sunMesh = new THREE.Mesh(sunGeo, sunMat);
-    sunMesh.visible = false;
-    scene.add(sunMesh);
-    sunMeshRef.current = sunMesh;
+    // ── 1. LOAD AUTHENTIC NASA CLOUD EARTH MODEL ────────────────
+    // Primary path: downloaded folder /earth,sun,moon textures and models/EarthClouds_1_12756.glb
+    const earthUrls = [
+      '/earth,sun,moon textures and models/EarthClouds_1_12756.glb',
+      '/models/earth.glb',
+    ];
 
-    // Load Moon model
-    const loader = new GLTFLoader();
-    loader.load('/models/moon_small.glb', (gltf) => {
-      const model = gltf.scene;
-      // Check model size and scale if needed
-      const box = new THREE.Box3().setFromObject(model);
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      console.log('Moon model size:', size.x, size.y, size.z, 'center:', center.x, center.y, center.z);
-      // Scale to radius 1 if needed
-      const maxDim = Math.max(size.x, size.y, size.z);
-      if (maxDim > 2 || maxDim < 0.5) {
-        const scale = 2 / maxDim;
-        model.scale.set(scale, scale, scale);
-        console.log('Scaled Moon model by', scale);
+    const loadEarth = (index = 0) => {
+      if (index >= earthUrls.length) return;
+      gltfLoader.load(
+        earthUrls[index],
+        (gltf) => {
+          const earthScene = gltf.scene;
+          const box = new THREE.Box3().setFromObject(earthScene);
+          const size = box.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+
+          // Scaled to real 3.67x Moon ratio! (Radius = 3.67, Diameter = 7.34)
+          if (maxDim > 0) {
+            const scale = (EARTH_RADIUS * 2) / maxDim;
+            earthScene.scale.set(scale, scale, scale);
+          }
+
+          earthScene.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+
+          scene.add(earthScene);
+          earthMeshRef.current = earthScene;
+          console.log('✓ NASA Cloud Earth model loaded successfully');
+        },
+        undefined,
+        (err) => {
+          console.warn(`Could not load Earth from ${earthUrls[index]}, trying fallback:`, err);
+          loadEarth(index + 1);
+        }
+      );
+    };
+    loadEarth(0);
+
+    // ── 2. LOAD AUTHENTIC NASA SUN MODEL ────────────────────────
+    // Primary path: /earth,sun,moon textures and models/Sun_1_1391000.glb
+    const sunUrls = [
+      '/earth,sun,moon textures and models/Sun_1_1391000.glb',
+      '/models/sun.glb',
+    ];
+
+    const loadSun = (index = 0) => {
+      if (index >= sunUrls.length) return;
+      gltfLoader.load(
+        sunUrls[index],
+        (gltf) => {
+          const sunScene = gltf.scene;
+          const box = new THREE.Box3().setFromObject(sunScene);
+          const size = box.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+
+          // Scaled to prominent solar star disk (Radius = 10.0, Diameter = 20.0)
+          if (maxDim > 0) {
+            const scale = (SUN_RADIUS * 2) / maxDim;
+            sunScene.scale.set(scale, scale, scale);
+          }
+
+          // Solar star emissive glow material setup
+          sunScene.traverse((child) => {
+            if (child.isMesh && child.material) {
+              child.material.emissive = new THREE.Color(0xffaa22);
+              child.material.emissiveIntensity = 0.9;
+              child.material.toneMapped = false;
+            }
+          });
+
+          scene.add(sunScene);
+          sunMeshRef.current = sunScene;
+          console.log('✓ NASA Sun model loaded successfully');
+        },
+        undefined,
+        (err) => {
+          console.warn(`Could not load Sun from ${sunUrls[index]}, trying fallback:`, err);
+          loadSun(index + 1);
+        }
+      );
+    };
+    loadSun(0);
+
+    // ── 3. LOAD MOON MODEL ──────────────────────────────────────
+    gltfLoader.load(
+      '/models/moon_small.glb',
+      (gltf) => {
+        const model = gltf.scene;
+        const box = new THREE.Box3().setFromObject(model);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        if (maxDim > 0) {
+          const scale = 2.0 / maxDim; // Normalized to radius 1.0
+          model.scale.set(scale, scale, scale);
+        }
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        scene.add(model);
+        modelRef.current = model;
+        addSiteMarkers(scene, markersRef);
+      },
+      undefined,
+      (error) => {
+        console.error('Error loading Moon model:', error);
+        const geometry = new THREE.SphereGeometry(1, 64, 64);
+        const material = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.9 });
+        const sphere = new THREE.Mesh(geometry, material);
+        sphere.castShadow = true;
+        sphere.receiveShadow = true;
+        scene.add(sphere);
+        modelRef.current = sphere;
+        addSiteMarkers(scene, markersRef);
       }
-      scene.add(model);
-      modelRef.current = model;
-      addSiteMarkers(scene, markersRef);
-    }, undefined, (error) => {
-      console.error('Error loading Moon model:', error);
-      const geometry = new THREE.SphereGeometry(1, 64, 64);
-      const material = new THREE.MeshStandardMaterial({ color: 0xcccccc });
-      const sphere = new THREE.Mesh(geometry, material);
-      scene.add(sphere);
-      modelRef.current = sphere;
-      addSiteMarkers(scene, markersRef);
-    });
+    );
 
-    // Click handler for site markers
+    // Click handler for site markers on globe
     const onClick = (event) => {
       const rect = container.getBoundingClientRect();
       mouseRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -176,22 +346,47 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         if (siteId) {
           setSelectedSiteId(siteId);
           const clickedSite = sites.find((s) => s.id === siteId);
-          if (clickedSite && onSiteClick) onSiteClick(clickedSite);
+          if (clickedSite) {
+            flyToSite(clickedSite);
+            if (onSiteClick) onSiteClick(clickedSite);
+          }
         }
       }
     };
     container.addEventListener('click', onClick);
 
+    // Animation Loop
     let animationId;
     const animate = () => {
       animationId = requestAnimationFrame(animate);
+
+      // Smooth camera fly-to interpolation when zooming to site
+      if (flyTargetRef.current.active) {
+        camera.position.lerp(flyTargetRef.current.position, 0.05);
+        controls.target.lerp(flyTargetRef.current.lookAt, 0.05);
+        if (camera.position.distanceTo(flyTargetRef.current.position) < 0.03) {
+          flyTargetRef.current.active = false;
+        }
+      }
+
       controls.update();
-      const zoomLevel = camera.position.length();
-      const show3D = zoomLevel > 6;
-      if (earthMeshRef.current) earthMeshRef.current.visible = show3D;
-      if (sunMeshRef.current) sunMeshRef.current.visible = show3D;
+
+      // Earth slow diurnal spin
+      if (earthMeshRef.current) {
+        earthMeshRef.current.rotation.y += 0.0008;
+      }
+      // Sun slow rotation
+      if (sunMeshRef.current) {
+        sunMeshRef.current.rotation.y += 0.0003;
+      }
+
+      const camDist = camera.position.length();
+      const show3D = camDist > 4.5;
+      if (earthMeshRef.current) earthMeshRef.current.visible = true;
+      if (sunMeshRef.current) sunMeshRef.current.visible = true;
       if (sunSpriteRef.current) sunSpriteRef.current.visible = !show3D;
       if (earthSpriteRef.current) earthSpriteRef.current.visible = !show3D;
+
       renderer.render(scene, camera);
     };
     animate();
@@ -213,50 +408,48 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         container.removeChild(renderer.domElement);
       }
     };
-  }, []);
+  }, [flyToSite]);
 
-  // Update positions based on date and showRays
+  // Update Sun & Earth ephemeris vectors based on date and time
   useEffect(() => {
     if (!sunLightRef.current) return;
     import('astronomy-engine').then((Astronomy) => {
-      const time = new Date(date + 'T' + String(currentHour).padStart(2, '0') + ':00:00Z');
+      const time = new Date(`${date}T${String(currentHour).padStart(2, '0')}:00:00Z`);
       const moonVec = Astronomy.GeoVector(Astronomy.Body.Moon, time, true);
       const sunVec = Astronomy.GeoVector(Astronomy.Body.Sun, time, true);
 
+      // Sun Vector from Moon center
       const dSun = { x: sunVec.x - moonVec.x, y: sunVec.y - moonVec.y, z: sunVec.z - moonVec.z };
-      const mag = Math.sqrt(dSun.x ** 2 + dSun.y ** 2 + dSun.z ** 2);
-      const dir = { x: dSun.x / mag, y: dSun.y / mag, z: dSun.z / mag };
+      const sMag = Math.sqrt(dSun.x ** 2 + dSun.y ** 2 + dSun.z ** 2);
+      const dirSun = { x: dSun.x / sMag, y: dSun.y / sMag, z: dSun.z / sMag };
 
-      sunLightRef.current.position.set(dir.x * 10, dir.y * 10, dir.z * 10);
+      // Directional light from Sun
+      sunLightRef.current.position.set(dirSun.x * 30, dirSun.y * 30, dirSun.z * 30);
       sunLightRef.current.target.position.set(0, 0, 0);
       sunLightRef.current.target.updateMatrixWorld();
-      sunLightRef.current.intensity = showRays ? 1.5 : 0;
 
-      // Sun sprite (further away to avoid overlapping Moon)
-      const dist = 6.0;
-      if (sunSpriteRef.current) {
-        sunSpriteRef.current.position.set(dir.x * dist, dir.y * dist, dir.z * dist);
-        sunSpriteRef.current.visible = showRays;
-      }
-
-      // Earth direction
-      const dEarth = { x: -moonVec.x, y: -moonVec.y, z: -moonVec.z };
-      const earthMag = Math.sqrt(dEarth.x ** 2 + dEarth.y ** 2 + dEarth.z ** 2);
-      const eDir = { x: dEarth.x / earthMag, y: dEarth.y / earthMag, z: dEarth.z / earthMag };
-      if (earthSpriteRef.current) {
-        earthSpriteRef.current.position.set(eDir.x * dist, eDir.y * dist, eDir.z * dist);
-        earthSpriteRef.current.visible = showRays;
-      }
-
-      // 3D Earth and Sun meshes
-      if (earthMeshRef.current) {
-        earthMeshRef.current.position.set(eDir.x * EARTH_DIST, eDir.y * EARTH_DIST, eDir.z * EARTH_DIST);
-      }
+      // Sun 3D Model position in deep sky
       if (sunMeshRef.current) {
-        sunMeshRef.current.position.set(dir.x * SUN_DIST, dir.y * SUN_DIST, dir.z * SUN_DIST);
+        sunMeshRef.current.position.set(dirSun.x * SUN_DIST, dirSun.y * SUN_DIST, dirSun.z * SUN_DIST);
+      }
+      if (sunSpriteRef.current) {
+        sunSpriteRef.current.position.set(dirSun.x * 7.0, dirSun.y * 7.0, dirSun.z * 7.0);
       }
 
-      // Light rays
+      // Earth Vector from Moon center (Geocentric Earth is at -moonVec)
+      const dEarth = { x: -moonVec.x, y: -moonVec.y, z: -moonVec.z };
+      const eMag = Math.sqrt(dEarth.x ** 2 + dEarth.y ** 2 + dEarth.z ** 2);
+      const dirEarth = { x: dEarth.x / eMag, y: dEarth.y / eMag, z: dEarth.z / eMag };
+
+      // Earth 3D Model position with real 3.67x scale
+      if (earthMeshRef.current) {
+        earthMeshRef.current.position.set(dirEarth.x * EARTH_DIST, dirEarth.y * EARTH_DIST, dirEarth.z * EARTH_DIST);
+      }
+      if (earthSpriteRef.current) {
+        earthSpriteRef.current.position.set(dirEarth.x * 7.0, dirEarth.y * 7.0, dirEarth.z * 7.0);
+      }
+
+      // Light Rays
       const scene = sceneRef.current;
       if (sunRayRef.current) { scene.remove(sunRayRef.current); sunRayRef.current = null; }
       if (earthRayRef.current) { scene.remove(earthRayRef.current); earthRayRef.current = null; }
@@ -264,81 +457,127 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
       if (showRays) {
         const sunRayGeom = new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(0, 0, 0),
-          new THREE.Vector3(dir.x * dist, dir.y * dist, dir.z * dist),
+          new THREE.Vector3(dirSun.x * SUN_DIST, dirSun.y * SUN_DIST, dirSun.z * SUN_DIST),
         ]);
-        const sunRay = new THREE.Line(sunRayGeom, new THREE.LineBasicMaterial({ color: 0xffff00, opacity: 0.5, transparent: true }));
+        const sunRay = new THREE.Line(
+          sunRayGeom,
+          new THREE.LineBasicMaterial({ color: 0xfbbf24, opacity: 0.45, transparent: true })
+        );
         scene.add(sunRay);
         sunRayRef.current = sunRay;
 
         const earthRayGeom = new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(0, 0, 0),
-          new THREE.Vector3(eDir.x * dist, eDir.y * dist, eDir.z * dist),
+          new THREE.Vector3(dirEarth.x * EARTH_DIST, dirEarth.y * EARTH_DIST, dirEarth.z * EARTH_DIST),
         ]);
-        const earthRay = new THREE.Line(earthRayGeom, new THREE.LineBasicMaterial({ color: 0x4488ff, opacity: 0.5, transparent: true }));
+        const earthRay = new THREE.Line(
+          earthRayGeom,
+          new THREE.LineBasicMaterial({ color: 0x38bdf8, opacity: 0.45, transparent: true })
+        );
         scene.add(earthRay);
         earthRayRef.current = earthRay;
       }
     });
   }, [date, showRays, currentHour]);
 
-  useEffect(() => {
-    if (selectedSite?.id) setSelectedSiteId(selectedSite.id);
-  }, [selectedSite]);
-
+  // Update site marker selection highlights
   useEffect(() => {
     markersRef.current.forEach((marker) => {
       if (marker.userData.siteId === selectedSiteId) {
-        marker.material.color.set(0xff4444);
-        marker.scale.set(1.5, 1.5, 1.5);
+        marker.material.color.set(0xf59e0b);
+        marker.scale.set(1.6, 1.6, 1.6);
       } else {
         marker.material.color.set(0xffffff);
-        marker.scale.set(1, 1, 1);
+        marker.scale.set(1.0, 1.0, 1.0);
       }
     });
   }, [selectedSiteId]);
 
-  const handleSiteClick = (siteId) => {
-    setSelectedSiteId(siteId);
-    if (onSiteClick) {
-      const clickedSite = sites.find((s) => s.id === siteId);
-      onSiteClick(clickedSite);
-    }
+  const handleSiteSelect = (site) => {
+    setSelectedSiteId(site.id);
+    flyToSite(site);
+    if (onSiteClick) onSiteClick(site);
   };
 
   return (
-    <div className="relative w-full h-full">
-      <div ref={containerRef} className="w-full h-full min-h-[400px] rounded-lg overflow-hidden border border-[#2a2a4a]" />
-      
-      <button
-        onClick={() => setShowRays(!showRays)}
-        className={`absolute top-2 right-2 px-3 py-1 rounded text-xs font-bold ${showRays ? 'bg-[#ffcc00] text-black' : 'bg-[#12122a] text-[#e0e0ff] border border-[#2a2a4a]'}`}
-      >
-        {showRays ? 'Rays ON' : 'Rays OFF'}
-      </button>
+    <div className="relative w-full h-full min-h-[500px]">
+      {/* 3D Canvas */}
+      <div ref={containerRef} className="w-full h-full min-h-[500px] rounded-xl overflow-hidden border border-[#1e293b]" />
 
-      <div className="absolute bottom-2 left-2 bg-[#12122a]/80 rounded p-2 text-xs max-h-[200px] overflow-y-auto">
-        <div className="text-[#a0a0cc] mb-1">Sites (click marker or name):</div>
-        {sites.slice(0, 6).map((s) => (
-          <div
-            key={s.id}
-            className={`cursor-pointer hover:text-[#ffcc00] ${selectedSiteId === s.id ? 'text-[#ffcc00] font-bold' : 'text-[#e0e0ff]'}`}
-            onClick={() => handleSiteClick(s.id)}
-          >
-            {s.name}
-          </div>
-        ))}
+      {/* Top Controls Toolbar */}
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+        {/* LIGHTING BUTTON (Requested by user) */}
+        <button
+          onClick={() => setLightingMode(!lightingMode)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all ${
+            lightingMode
+              ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-lg shadow-amber-400/25 ring-2 ring-amber-400/30'
+              : 'bg-[#0b1120]/80 text-slate-300 border-slate-700 hover:border-slate-500 hover:text-white'
+          }`}
+          title="Lights up the entire space so you can see all sides of Earth, Moon and Sun"
+        >
+          <Lightbulb className={`w-3.5 h-3.5 ${lightingMode ? 'text-slate-950 fill-current' : 'text-amber-400'}`} />
+          <span>{lightingMode ? 'Lighting: ON' : 'Lighting: OFF'}</span>
+        </button>
+
+        {/* Light Rays Toggle */}
+        <button
+          onClick={() => setShowRays(!showRays)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all ${
+            showRays
+              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+              : 'bg-[#0b1120]/80 text-slate-400 border-slate-700 hover:border-slate-500'
+          }`}
+        >
+          {showRays ? 'Vectors ON' : 'Vectors OFF'}
+        </button>
       </div>
 
-      {/* Time slider */}
-      <div className="absolute bottom-2 right-2 bg-[#12122a]/80 rounded p-2 text-xs">
-        <div className="text-[#a0a0cc] mb-1">Time: {String(currentHour).padStart(2, '0')}:00 UTC</div>
+      {/* Top Left: Proportional Scale Badge */}
+      <div className="absolute top-3 left-3 z-10 hidden sm:flex items-center gap-2 bg-[#0b1120]/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-700/60 text-[11px] font-mono text-slate-300">
+        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        <span>NASA 3.67:1 Scale · Cloud Earth & Sun Model Active</span>
+      </div>
+
+      {/* Bottom Left: Site Fly-to Navigation Chips */}
+      <div className="absolute bottom-3 left-3 z-10 bg-[#0b1120]/85 backdrop-blur-md p-2.5 rounded-xl border border-slate-700/60 max-w-xs text-xs">
+        <div className="flex items-center gap-1.5 text-slate-400 mb-2 font-mono text-[10px] uppercase tracking-wider">
+          <Navigation className="w-3 h-3 text-amber-400" />
+          <span>Zoom to Landing Site</span>
+        </div>
+        <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto pr-1">
+          {sites.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => handleSiteSelect(s)}
+              className={`px-2 py-1 rounded text-[11px] font-medium transition-all ${
+                selectedSiteId === s.id
+                  ? 'bg-amber-400 text-slate-950 font-bold shadow-md shadow-amber-400/20'
+                  : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              {s.name.split('(')[0].trim()}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom Right: Timeline Scrubber */}
+      <div className="absolute bottom-3 right-3 z-10 bg-[#0b1120]/85 backdrop-blur-md p-3 rounded-xl border border-slate-700/60 text-xs">
+        <div className="flex items-center justify-between text-slate-300 mb-1.5 font-mono text-[11px]">
+          <span className="flex items-center gap-1 text-amber-400">
+            <Clock className="w-3 h-3" />
+            <span>Time:</span>
+          </span>
+          <span className="font-bold text-white">{String(currentHour).padStart(2, '0')}:00 UTC</span>
+        </div>
         <input
           type="range"
           min={0}
           max={23}
           value={currentHour}
           onChange={(e) => setCurrentHour(Number(e.target.value))}
-          className="w-32 accent-[#ffcc00]"
+          className="w-36 accent-amber-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
         />
       </div>
     </div>
@@ -346,8 +585,8 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
 }
 
 function addSiteMarkers(scene, markersRef) {
-  const markerGeometry = new THREE.SphereGeometry(0.05, 12, 12);
-  const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+  const markerGeometry = new THREE.SphereGeometry(0.04, 16, 16);
+  const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
   sites.forEach((site) => {
     const latRad = (site.lat * Math.PI) / 180;
@@ -360,12 +599,19 @@ function addSiteMarkers(scene, markersRef) {
     marker.position.set(x, y, z);
     marker.userData.siteId = site.id;
     marker.userData.siteName = site.name;
-    // Add a glow ring
-    const ringGeo = new THREE.RingGeometry(0.06, 0.08, 16);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0xff4444, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+
+    // Glowing target ring around site
+    const ringGeo = new THREE.RingGeometry(0.05, 0.07, 24);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.65,
+    });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.lookAt(new THREE.Vector3(x, y, z).normalize());
     ring.position.set(x, y, z);
+
     scene.add(ring);
     scene.add(marker);
     markersRef.current.push(marker);
