@@ -1,0 +1,33 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+docs/deployment_final.txt
+docs/DEPLOYMENT_GUIDE.md
+
+# Large terrain files (>100MB)
+public/LDEM,LDEC,LDE/
+dist/LDEM,LDEC,LDE/
+
+PHASE2.md
+*.md

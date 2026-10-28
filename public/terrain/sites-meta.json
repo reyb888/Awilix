@@ -1,0 +1,90 @@
+{
+  "shackleton-rim": {
+    "name": "Shackleton Crater Rim",
+    "lat": -89.9,
+    "lon": 0,
+    "minElevationM": -2618.7,
+    "maxElevationM": 1736.8,
+    "elevationSpanM": 4355.5,
+    "patchKm": 10.24,
+    "textureMap": "/terrain/shackleton-rim_texture.png",
+    "terrainDataUrl": "/terrain/shackleton-rim_terrain.json"
+  },
+  "malapert-a": {
+    "name": "Malapert A",
+    "lat": -86,
+    "lon": -2,
+    "minElevationM": -2874.3,
+    "maxElevationM": -2187.1,
+    "elevationSpanM": 687.1,
+    "patchKm": 10.24,
+    "textureMap": "/terrain/malapert-a_texture.png",
+    "terrainDataUrl": "/terrain/malapert-a_terrain.json"
+  },
+  "mons-mouton": {
+    "name": "Mons Mouton (Connecting Plateau)",
+    "lat": -84.5,
+    "lon": 29,
+    "minElevationM": -3924.4,
+    "maxElevationM": -2453.4,
+    "elevationSpanM": 1471,
+    "patchKm": 10.24,
+    "textureMap": "/terrain/mons-mouton_texture.png",
+    "terrainDataUrl": "/terrain/mons-mouton_terrain.json"
+  },
+  "nobile": {
+    "name": "Nobile Crater Rim",
+    "lat": -85.2,
+    "lon": 54,
+    "minElevationM": -3304.6,
+    "maxElevationM": -3153.5,
+    "elevationSpanM": 151.1,
+    "patchKm": 10.24,
+    "textureMap": "/terrain/nobile_texture.png",
+    "terrainDataUrl": "/terrain/nobile_terrain.json"
+  },
+  "shackleton-ridge": {
+    "name": "Shackleton Connecting Ridge",
+    "lat": -89.5,
+    "lon": 0,
+    "minElevationM": -1836.2,
+    "maxElevationM": 1584.1,
+    "elevationSpanM": 3420.3,
+    "patchKm": 10.24,
+    "textureMap": "/terrain/shackleton-ridge_texture.png",
+    "terrainDataUrl": "/terrain/shackleton-ridge_terrain.json"
+  },
+  "south-pole": {
+    "name": "Geographic South Pole",
+    "lat": -90,
+    "lon": 0,
+    "minElevationM": -2593.4,
+    "maxElevationM": 1676.8,
+    "elevationSpanM": 4270.2,
+    "patchKm": 10.24,
+    "textureMap": "/terrain/south-pole_texture.png",
+    "terrainDataUrl": "/terrain/south-pole_terrain.json"
+  },
+  "reiner-gamma": {
+    "name": "Reiner Gamma (Lunar Swirl)",
+    "lat": 7.5,
+    "lon": -59,
+    "minElevationM": -1889.9,
+    "maxElevationM": -1596.5,
+    "elevationSpanM": 293.4,
+    "patchKm": 10.24,
+    "textureMap": "/terrain/reiner-gamma_texture.png",
+    "terrainDataUrl": "/terrain/reiner-gamma_terrain.json"
+  },
+  "mare-crisium": {
+    "name": "Mare Crisium (Sea of Crises)",
+    "lat": 17,
+    "lon": 59.1,
+    "minElevationM": -3659.8,
+    "maxElevationM": -3471.8,
+    "elevationSpanM": 188,
+    "patchKm": 10.24,
+    "textureMap": "/terrain/mare-crisium_texture.png",
+    "terrainDataUrl": "/terrain/mare-crisium_terrain.json"
+  }
+}
