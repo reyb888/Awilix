@@ -237,8 +237,17 @@ export default function SiteTerrainView({ site, date, onBack }) {
             const s = 2.2 / maxDim;
             earthModel.scale.set(s, s, s);
           }
+          earthModel.traverse((child) => {
+            if (child.isMesh && child.material) {
+              child.material.depthTest = true;
+              child.material.depthWrite = true;
+            }
+          });
+          earthModel.position.set(0, -9999, 0);
+          earthModel.visible = false;
           scene.add(earthModel);
           earthMeshRef.current = earthModel;
+          updateLighting();
         },
         undefined,
         () => loadSkyEarth(index + 1)
@@ -268,10 +277,15 @@ export default function SiteTerrainView({ site, date, onBack }) {
             if (child.isMesh && child.material) {
               child.material.emissive = new THREE.Color(0xffbb33);
               child.material.emissiveIntensity = 1.0;
+              child.material.depthTest = true;
+              child.material.depthWrite = true;
             }
           });
+          sunModel.position.set(0, -9999, 0);
+          sunModel.visible = false;
           scene.add(sunModel);
           sunMeshRef.current = sunModel;
+          updateLighting();
         },
         undefined,
         () => loadSkySun(index + 1)

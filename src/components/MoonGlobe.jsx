@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import sites from '../data/sites.json';
+import { getSubPoints } from '../lib/ephemeris.js';
 import { Sun, Radio, Compass, Lightbulb, Sparkles, Navigation, Clock } from 'lucide-react';
 
 // Physical astronomical ratios scaled for visual clarity:
@@ -47,6 +48,10 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
   const earthRayRef = useRef(null);
   const earthMeshRef = useRef(null);
   const sunMeshRef = useRef(null);
+
+  // Body-frame celestial direction vectors (Moon body frame: X=East, Y=North, Z=Prime Meridian)
+  const dirEarthRef = useRef(new THREE.Vector3(0, 0, 1));
+  const dirSunRef = useRef(new THREE.Vector3(1, 0, 0));
 
   // Camera Fly-to Animation Ref
   const flyTargetRef = useRef({
@@ -202,12 +207,23 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
             if (child.isMesh) {
               child.castShadow = true;
               child.receiveShadow = true;
+              if (child.material) {
+                child.material.depthTest = true;
+                child.material.depthWrite = true;
+              }
             }
           });
 
+          // IMMEDIATELY position at deep orbital distance — NEVER allow sitting at (0, 0, 0)
+          earthScene.position.set(
+            dirEarthRef.current.x * EARTH_DIST,
+            dirEarthRef.current.y * EARTH_DIST,
+            dirEarthRef.current.z * EARTH_DIST
+          );
+
           scene.add(earthScene);
           earthMeshRef.current = earthScene;
-          console.log('✓ NASA Cloud Earth model loaded successfully');
+          console.log('✓ NASA Cloud Earth model loaded and positioned in orbit');
         },
         undefined,
         (err) => {
@@ -247,12 +263,21 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
               child.material.emissive = new THREE.Color(0xffaa22);
               child.material.emissiveIntensity = 0.9;
               child.material.toneMapped = false;
+              child.material.depthTest = true;
+              child.material.depthWrite = true;
             }
           });
 
+          // IMMEDIATELY position in deep solar space — NEVER allow sitting at (0, 0, 0)
+          sunScene.position.set(
+            dirSunRef.current.x * SUN_DIST,
+            dirSunRef.current.y * SUN_DIST,
+            dirSunRef.current.z * SUN_DIST
+          );
+
           scene.add(sunScene);
           sunMeshRef.current = sunScene;
-          console.log('✓ NASA Sun model loaded successfully');
+          console.log('✓ NASA Sun model loaded and positioned in solar space');
         },
         undefined,
         (err) => {
@@ -372,68 +397,87 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
   }, [flyToSite]);
 
   // Update Sun & Earth ephemeris vectors based on date and time
-  useEffect(() => {
-    if (!sunLightRef.current) return;
-    import('astronomy-engine').then((Astronomy) => {
-      const time = new Date(`${date}T${String(currentHour).padStart(2, '0')}:00:00Z`);
-      const moonVec = Astronomy.GeoVector(Astronomy.Body.Moon, time, true);
-      const sunVec = Astronomy.GeoVector(Astronomy.Body.Sun, time, true);
+  const updateEphemerisPositions = useCallback(() => {
+    try {
+      const hourStr = String(currentHour).padStart(2, '0');
+      const time = new Date(`${date}T${hourStr}:00:00Z`);
+      const { subsolar, subearth } = getSubPoints(time);
 
-      // Sun Vector from Moon center
-      const dSun = { x: sunVec.x - moonVec.x, y: sunVec.y - moonVec.y, z: sunVec.z - moonVec.z };
-      const sMag = Math.sqrt(dSun.x ** 2 + dSun.y ** 2 + dSun.z ** 2);
-      const dirSun = { x: dSun.x / sMag, y: dSun.y / sMag, z: dSun.z / sMag };
+      // Selenographic coordinates to 3D Cartesian (matching Moon body frame and site markers):
+      // X = East (+lon 90°), Y = North (+lat 90°), Z = Prime Meridian (lat 0, lon 0)
+      const eLat = (subearth.lat * Math.PI) / 180;
+      const eLon = (subearth.lon * Math.PI) / 180;
+      const dirEarth = new THREE.Vector3(
+        Math.cos(eLat) * Math.sin(eLon),
+        Math.sin(eLat),
+        Math.cos(eLat) * Math.cos(eLon)
+      ).normalize();
+      dirEarthRef.current.copy(dirEarth);
 
-      // Directional light from Sun
-      sunLightRef.current.position.set(dirSun.x * 30, dirSun.y * 30, dirSun.z * 30);
-      sunLightRef.current.target.position.set(0, 0, 0);
-      sunLightRef.current.target.updateMatrixWorld();
+      const sLat = (subsolar.lat * Math.PI) / 180;
+      const sLon = (subsolar.lon * Math.PI) / 180;
+      const dirSun = new THREE.Vector3(
+        Math.cos(sLat) * Math.sin(sLon),
+        Math.sin(sLat),
+        Math.cos(sLat) * Math.cos(sLon)
+      ).normalize();
+      dirSunRef.current.copy(dirSun);
 
-      // Sun 3D Model position in deep sky
+      // 1. Sun Directional Light
+      if (sunLightRef.current) {
+        sunLightRef.current.position.set(dirSun.x * 30, dirSun.y * 30, dirSun.z * 30);
+        sunLightRef.current.target.position.set(0, 0, 0);
+        sunLightRef.current.target.updateMatrixWorld();
+      }
+
+      // 2. NASA Sun 3D Model in deep space
       if (sunMeshRef.current) {
         sunMeshRef.current.position.set(dirSun.x * SUN_DIST, dirSun.y * SUN_DIST, dirSun.z * SUN_DIST);
       }
 
-      // Earth Vector from Moon center (Geocentric Earth is at -moonVec)
-      const dEarth = { x: -moonVec.x, y: -moonVec.y, z: -moonVec.z };
-      const eMag = Math.sqrt(dEarth.x ** 2 + dEarth.y ** 2 + dEarth.z ** 2);
-      const dirEarth = { x: dEarth.x / eMag, y: dEarth.y / eMag, z: dEarth.z / eMag };
-
-      // Earth 3D Model position with real 3.67x scale
+      // 3. NASA Cloud Earth 3D Model in deep orbital distance
       if (earthMeshRef.current) {
         earthMeshRef.current.position.set(dirEarth.x * EARTH_DIST, dirEarth.y * EARTH_DIST, dirEarth.z * EARTH_DIST);
       }
 
-      // Light Rays
+      // 4. Light Rays
       const scene = sceneRef.current;
-      if (sunRayRef.current) { scene.remove(sunRayRef.current); sunRayRef.current = null; }
-      if (earthRayRef.current) { scene.remove(earthRayRef.current); earthRayRef.current = null; }
+      if (scene) {
+        if (sunRayRef.current) { scene.remove(sunRayRef.current); sunRayRef.current = null; }
+        if (earthRayRef.current) { scene.remove(earthRayRef.current); earthRayRef.current = null; }
 
-      if (showRays) {
-        const sunRayGeom = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(0, 0, 0),
-          new THREE.Vector3(dirSun.x * SUN_DIST, dirSun.y * SUN_DIST, dirSun.z * SUN_DIST),
-        ]);
-        const sunRay = new THREE.Line(
-          sunRayGeom,
-          new THREE.LineBasicMaterial({ color: 0xfbbf24, opacity: 0.45, transparent: true })
-        );
-        scene.add(sunRay);
-        sunRayRef.current = sunRay;
+        if (showRays) {
+          const sunRayGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(dirSun.x * SUN_DIST, dirSun.y * SUN_DIST, dirSun.z * SUN_DIST),
+          ]);
+          const sunRay = new THREE.Line(
+            sunRayGeom,
+            new THREE.LineBasicMaterial({ color: 0xfbbf24, opacity: 0.45, transparent: true })
+          );
+          scene.add(sunRay);
+          sunRayRef.current = sunRay;
 
-        const earthRayGeom = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(0, 0, 0),
-          new THREE.Vector3(dirEarth.x * EARTH_DIST, dirEarth.y * EARTH_DIST, dirEarth.z * EARTH_DIST),
-        ]);
-        const earthRay = new THREE.Line(
-          earthRayGeom,
-          new THREE.LineBasicMaterial({ color: 0x38bdf8, opacity: 0.45, transparent: true })
-        );
-        scene.add(earthRay);
-        earthRayRef.current = earthRay;
+          const earthRayGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(dirEarth.x * EARTH_DIST, dirEarth.y * EARTH_DIST, dirEarth.z * EARTH_DIST),
+          ]);
+          const earthRay = new THREE.Line(
+            earthRayGeom,
+            new THREE.LineBasicMaterial({ color: 0x38bdf8, opacity: 0.45, transparent: true })
+          );
+          scene.add(earthRay);
+          earthRayRef.current = earthRay;
+        }
       }
-    });
-  }, [date, showRays, currentHour]);
+    } catch (err) {
+      console.warn('Ephemeris update error:', err);
+    }
+  }, [currentHour, date, showRays]);
+
+  useEffect(() => {
+    updateEphemerisPositions();
+  }, [updateEphemerisPositions]);
 
   // Update site marker selection highlights
   useEffect(() => {
