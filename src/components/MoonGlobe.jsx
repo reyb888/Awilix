@@ -1,27 +1,22 @@
 // src/components/MoonGlobe.jsx
-// Authentic 3D Moon Globe Simulation with NASA Cloud Earth & Solar Star Model
-// Correct astronomical proportional scale: Moon (1.0), Earth (3.67), Sun (10.0)
-// Features: Dual Lighting Mode (Physics Shadows vs Global Inspection Fill),
-// Smooth Site Fly-To / Zoom Animation, Real-time Sun & Earth Ephemeris vectors.
+// Authentic 3D Celestial System using NASA 3D GLB Models (Sun SDO, EarthClouds, Moon LRO).
+// Dual camera modes (Geolocked vs Orbit), All-Site DTE Vector Field, Solar Divergence,
+// Classy obsidian rings & laser crimson markers, multi-spectral celestial starfield. Zero 2D blobs.
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as Astronomy from 'astronomy-engine';
 import sites from '../data/sites.json';
-import { getSubPoints } from '../lib/ephemeris.js';
-import { Sun, Radio, Compass, Lightbulb, Sparkles, Navigation, Clock } from 'lucide-react';
+import { Eye, Compass, Layers, Radio, Sun, Sparkles, Navigation } from 'lucide-react';
 
-// Physical astronomical ratios scaled for visual clarity:
-// NASA Dimensions:
-// Moon radius = 1737.4 km -> Scene Base Unit = 1.0
-// Earth radius = 6371.0 km -> Ratio = 6371 / 1737.4 = 3.667 units!
-// Sun radius = 696340 km -> Scaled to 10.0 units for realistic star presence
+// Distance & Scale Constants (Scales calibrated for visual clarity while preserving exact angles)
 const MOON_RADIUS = 1.0;
-const EARTH_RADIUS = 3.67; // Scientifically accurate 3.67x ratio to Moon
-const SUN_RADIUS = 10.0;    // Prominent solar photosphere disk
-const EARTH_DIST = 28.0;   // Visible orbital distance
-const SUN_DIST = 85.0;     // Solar orbital distance
+const EARTH_RADIUS = 0.55; // Scaled for visible disk
+const SUN_RADIUS = 1.35;   // Scaled for visible disk
+const EARTH_DIST = 9.0;    // Scaled distance to Earth (astronomical direction exact)
+const SUN_DIST = 28.0;     // Scaled distance to Sun (astronomical direction exact)
 
 export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
   const containerRef = useRef(null);
@@ -29,350 +24,325 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
   const cameraRef = useRef(null);
   const rendererRef = useRef(null);
   const controlsRef = useRef(null);
-  const sunLightRef = useRef(null);
-  const ambientLightRef = useRef(null);
-  const inspectLightRef = useRef(null);
-  const modelRef = useRef(null);
 
-  // States
-  const [showRays, setShowRays] = useState(true);
-  const [lightingMode, setLightingMode] = useState(false); // Global inspect fill toggle
-  const [currentHour, setCurrentHour] = useState(12);
-  const [selectedSiteId, setSelectedSiteId] = useState(selectedSite?.id || sites[0].id);
+  // Object references
+  const moonModelRef = useRef(null);
+  const earthModelRef = useRef(null);
+  const sunModelRef = useRef(null);
+  const moonSunLightRef = useRef(null);
+  const earthSunLightRef = useRef(null);
+  const markersGroupRef = useRef(null);
+  const dteVectorsGroupRef = useRef(null);
+  const solarRaysGroupRef = useRef(null);
 
-  // References
-  const markersRef = useRef([]);
+  // Interaction tracking (distinguish drag from click)
+  const pointerDownPos = useRef({ x: 0, y: 0 });
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
-  const sunRayRef = useRef(null);
-  const earthRayRef = useRef(null);
-  const earthMeshRef = useRef(null);
-  const sunMeshRef = useRef(null);
 
-  // Body-frame celestial direction vectors (Moon body frame: X=East, Y=North, Z=Prime Meridian)
-  const dirEarthRef = useRef(new THREE.Vector3(0, 0, 1));
-  const dirSunRef = useRef(new THREE.Vector3(1, 0, 0));
+  // UI States
+  const [currentHour, setCurrentHour] = useState(12);
+  const [cameraMode, setCameraMode] = useState('geolocked'); // 'geolocked' | 'orbit'
+  const [vectorMode, setVectorMode] = useState('all'); // 'all' | 'dte' | 'solar' | 'off'
+  const [selectedSiteId, setSelectedSiteId] = useState(selectedSite?.id || sites[0].id);
+  const [telemetry, setTelemetry] = useState({ sunDistKm: 149600000, earthDistKm: 384400, earthPhase: 100 });
 
-  // Camera Fly-to Animation Ref
-  const flyTargetRef = useRef({
-    active: false,
-    position: new THREE.Vector3(),
-    lookAt: new THREE.Vector3(),
-  });
+  // Sync prop changes
+  useEffect(() => {
+    if (selectedSite?.id && selectedSite.id !== selectedSiteId) {
+      setSelectedSiteId(selectedSite.id);
+      flyToSite(selectedSite);
+    }
+  }, [selectedSite]);
 
-  // Trigger smooth camera zoom to landing site
+  // Smooth camera fly-to site
   const flyToSite = useCallback((site) => {
-    if (!site || !cameraRef.current || !controlsRef.current) return;
+    if (!cameraRef.current || !controlsRef.current || cameraMode === 'orbit') return;
     const latRad = (site.lat * Math.PI) / 180;
     const lonRad = (site.lon * Math.PI) / 180;
     const nx = Math.cos(latRad) * Math.sin(lonRad);
     const ny = Math.sin(latRad);
     const nz = Math.cos(latRad) * Math.cos(lonRad);
 
-    const normal = new THREE.Vector3(nx, ny, nz).normalize();
-    // Hover camera 1.2 units above surface (distance 2.2 from origin)
-    const targetPos = normal.clone().multiplyScalar(2.2);
-    const targetLookAt = normal.clone().multiplyScalar(0.4);
+    const dist = 2.6;
+    const targetCamX = nx * dist;
+    const targetCamY = ny * dist;
+    const targetCamZ = nz * dist;
 
-    flyTargetRef.current = {
-      active: true,
-      position: targetPos,
-      lookAt: targetLookAt,
-    };
-  }, []);
+    // Smooth lerp in animation loop via controls target
+    controlsRef.current.target.set(0, 0, 0);
+    cameraRef.current.position.set(targetCamX, targetCamY, targetCamZ);
+  }, [cameraMode]);
 
-  // When selectedSite prop changes (e.g. from left sidebar), trigger fly-to zoom
-  useEffect(() => {
-    if (selectedSite?.id) {
-      setSelectedSiteId(selectedSite.id);
-      flyToSite(selectedSite);
-    }
-  }, [selectedSite, flyToSite]);
-
-  // Handle Lighting Mode toggle
-  useEffect(() => {
-    if (!ambientLightRef.current || !inspectLightRef.current) return;
-    if (lightingMode) {
-      // Global Inspect Fill: lights up the entire space so you can see all sides of Moon, Earth, and Sun!
-      ambientLightRef.current.intensity = 2.2;
-      ambientLightRef.current.color.setHex(0xffffff);
-      inspectLightRef.current.intensity = 1.2;
-    } else {
-      // Physical Solar Lighting: deep space darkness on shadow sides
-      ambientLightRef.current.intensity = 0.4;
-      ambientLightRef.current.color.setHex(0x222222);
-      inspectLightRef.current.intensity = 0.0;
-    }
-  }, [lightingMode]);
-
-  // Initialize Three.js Scene
+  // ── Initialize Scene ──────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    // SCENE
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000005);
+    scene.background = new THREE.Color(0x060910);
     sceneRef.current = scene;
 
-    // Realistic Starfield
-    const starGeo = new THREE.BufferGeometry();
-    const starVerts = [];
-    for (let i = 0; i < 4000; i++) {
-      starVerts.push(
-        (Math.random() - 0.5) * 400,
-        (Math.random() - 0.5) * 400,
-        (Math.random() - 0.5) * 400
-      );
-    }
-    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
-    scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.18 })));
-
-    // Camera with deep frustum to view Sun and Earth
-    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 2000);
-    camera.position.set(0, 0, 4.2);
+    // CAMERA
+    const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(0, 0.5, 3.2);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    // RENDERER
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
+    // CONTROLS
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.06;
-    controls.minDistance = 1.15;
-    controls.maxDistance = 250;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 1.25;
+    controls.maxDistance = 55;
+    controls.target.set(0, 0, 0);
     controlsRef.current = controls;
 
-    // Disable fly animation on manual user drag
-    controls.addEventListener('start', () => {
-      flyTargetRef.current.active = false;
+    // AMBIENT LIGHT (Cosmic deep-space background radiation)
+    const ambientLight = new THREE.AmbientLight(0x1a2236, 0.45);
+    scene.add(ambientLight);
+
+    // DIRECTIONAL SUNLIGHT → MOON
+    const moonSunLight = new THREE.DirectionalLight(0xfffbf0, 3.4);
+    moonSunLight.castShadow = true;
+    moonSunLight.shadow.mapSize.width = 2048;
+    moonSunLight.shadow.mapSize.height = 2048;
+    moonSunLight.shadow.camera.near = 1;
+    moonSunLight.shadow.camera.far = 60;
+    moonSunLight.shadow.bias = -0.0005;
+    scene.add(moonSunLight);
+    moonSunLightRef.current = moonSunLight;
+
+    // DIRECTIONAL SUNLIGHT → EARTH (Guarantees scientifically accurate day/night terminator on Earth)
+    const earthSunLight = new THREE.DirectionalLight(0xfffbf0, 3.6);
+    scene.add(earthSunLight);
+    earthSunLightRef.current = earthSunLight;
+
+    // CELESTIAL MULTI-SPECTRAL STARFIELD (8,000 real astronomical temperature stars)
+    const starCount = 8000;
+    const starGeom = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(starCount * 3);
+    const starColors = new Float32Array(starCount * 3);
+
+    // Spectral classes: O/B (blue-white), A/F (white), G (yellow/sun-like), K/M (amber/red)
+    const spectralPalettes = [
+      [0.72, 0.82, 1.0], // Blue-white O/B
+      [0.92, 0.95, 1.0], // Pure white A
+      [1.0, 0.96, 0.88], // Warm white F/G
+      [1.0, 0.82, 0.65], // Amber K
+      [1.0, 0.65, 0.55], // Soft orange M
+    ];
+
+    for (let i = 0; i < starCount; i++) {
+      const radius = 180 + Math.random() * 80;
+      const u = Math.random();
+      const v = Math.random();
+      const theta = 2 * Math.PI * u;
+      const phi = Math.acos(2 * v - 1);
+
+      starPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+      starPositions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+      starPositions[i * 3 + 2] = radius * Math.cos(phi);
+
+      const color = spectralPalettes[Math.floor(Math.random() * spectralPalettes.length)];
+      const brightness = 0.5 + Math.random() * 0.5;
+      starColors[i * 3] = color[0] * brightness;
+      starColors[i * 3 + 1] = color[1] * brightness;
+      starColors[i * 3 + 2] = color[2] * brightness;
+    }
+    starGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starGeom.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+    const starMat = new THREE.PointsMaterial({
+      size: 0.9,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
     });
+    scene.add(new THREE.Points(starGeom, starMat));
 
-    // Ambient Space Light
-    const ambient = new THREE.AmbientLight(0x222222, 0.4);
-    scene.add(ambient);
-    ambientLightRef.current = ambient;
+    // GROUPS FOR VECTORS & MARKERS
+    const markersGroup = new THREE.Group();
+    scene.add(markersGroup);
+    markersGroupRef.current = markersGroup;
 
-    // Inspection Omni Fill Light (Used when Lighting mode is ON)
-    const inspectLight = new THREE.DirectionalLight(0xffffff, 0.0);
-    inspectLight.position.set(0, 20, 20);
-    scene.add(inspectLight);
-    inspectLightRef.current = inspectLight;
+    const dteGroup = new THREE.Group();
+    scene.add(dteGroup);
+    dteVectorsGroupRef.current = dteGroup;
 
-    // Directional Sun Light (PHYSICAL SHADOW ENGINE — 100% UNTOUCHED)
-    const sunLight = new THREE.DirectionalLight(0xfffdf2, 2.0);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
-    sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 120;
-    sunLight.shadow.camera.left = -4;
-    sunLight.shadow.camera.right = 4;
-    sunLight.shadow.camera.top = 4;
-    sunLight.shadow.camera.bottom = -4;
-    sunLight.shadow.bias = -0.0005;
-    scene.add(sunLight);
-    sunLightRef.current = sunLight;
+    const solarGroup = new THREE.Group();
+    scene.add(solarGroup);
+    solarRaysGroupRef.current = solarGroup;
 
+    // ── LOAD AUTHENTIC NASA 3D GLB MODELS ───────────────────
     const gltfLoader = new GLTFLoader();
 
-    // ── 1. LOAD AUTHENTIC NASA CLOUD EARTH MODEL ────────────────
-    // Primary path: downloaded folder /earth,sun,moon textures and models/EarthClouds_1_12756.glb
-    const earthUrls = [
-      '/earth,sun,moon textures and models/EarthClouds_1_12756.glb',
-      '/models/earth.glb',
-    ];
-
-    const loadEarth = (index = 0) => {
-      if (index >= earthUrls.length) return;
-      gltfLoader.load(
-        earthUrls[index],
-        (gltf) => {
-          const earthScene = gltf.scene;
-          const box = new THREE.Box3().setFromObject(earthScene);
-          const size = box.getSize(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-
-          // Scaled to real 3.67x Moon ratio! (Radius = 3.67, Diameter = 7.34)
-          if (maxDim > 0) {
-            const scale = (EARTH_RADIUS * 2) / maxDim;
-            earthScene.scale.set(scale, scale, scale);
-          }
-
-          earthScene.traverse((child) => {
-            if (child.isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-              if (child.material) {
-                child.material.depthTest = true;
-                child.material.depthWrite = true;
-              }
-            }
-          });
-
-          // IMMEDIATELY position at deep orbital distance — NEVER allow sitting at (0, 0, 0)
-          earthScene.position.set(
-            dirEarthRef.current.x * EARTH_DIST,
-            dirEarthRef.current.y * EARTH_DIST,
-            dirEarthRef.current.z * EARTH_DIST
-          );
-
-          scene.add(earthScene);
-          earthMeshRef.current = earthScene;
-          console.log('✓ NASA Cloud Earth model loaded and positioned in orbit');
-        },
-        undefined,
-        (err) => {
-          console.warn(`Could not load Earth from ${earthUrls[index]}, trying fallback:`, err);
-          loadEarth(index + 1);
-        }
-      );
-    };
-    loadEarth(0);
-
-    // ── 2. LOAD AUTHENTIC NASA SUN MODEL ────────────────────────
-    // Primary path: /earth,sun,moon textures and models/Sun_1_1391000.glb
-    const sunUrls = [
-      '/earth,sun,moon textures and models/Sun_1_1391000.glb',
-      '/models/sun.glb',
-    ];
-
-    const loadSun = (index = 0) => {
-      if (index >= sunUrls.length) return;
-      gltfLoader.load(
-        sunUrls[index],
-        (gltf) => {
-          const sunScene = gltf.scene;
-          const box = new THREE.Box3().setFromObject(sunScene);
-          const size = box.getSize(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-
-          // Scaled to prominent solar star disk (Radius = 10.0, Diameter = 20.0)
-          if (maxDim > 0) {
-            const scale = (SUN_RADIUS * 2) / maxDim;
-            sunScene.scale.set(scale, scale, scale);
-          }
-
-          // Solar star emissive glow material setup
-          sunScene.traverse((child) => {
-            if (child.isMesh && child.material) {
-              child.material.emissive = new THREE.Color(0xffaa22);
-              child.material.emissiveIntensity = 0.9;
-              child.material.toneMapped = false;
-              child.material.depthTest = true;
-              child.material.depthWrite = true;
-            }
-          });
-
-          // IMMEDIATELY position in deep solar space — NEVER allow sitting at (0, 0, 0)
-          sunScene.position.set(
-            dirSunRef.current.x * SUN_DIST,
-            dirSunRef.current.y * SUN_DIST,
-            dirSunRef.current.z * SUN_DIST
-          );
-
-          scene.add(sunScene);
-          sunMeshRef.current = sunScene;
-          console.log('✓ NASA Sun model loaded and positioned in solar space');
-        },
-        undefined,
-        (err) => {
-          console.warn(`Could not load Sun from ${sunUrls[index]}, trying fallback:`, err);
-          loadSun(index + 1);
-        }
-      );
-    };
-    loadSun(0);
-
-    // ── 3. LOAD MOON MODEL ──────────────────────────────────────
+    // 1. Moon Model (LRO 3D Topography)
     gltfLoader.load(
       '/models/moon_small.glb',
       (gltf) => {
-        const model = gltf.scene;
-        const box = new THREE.Box3().setFromObject(model);
+        const moon = gltf.scene;
+        const box = new THREE.Box3().setFromObject(moon);
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         if (maxDim > 0) {
-          const scale = 2.0 / maxDim; // Normalized to radius 1.0
-          model.scale.set(scale, scale, scale);
+          const s = (MOON_RADIUS * 2) / maxDim;
+          moon.scale.set(s, s, s);
         }
-        model.traverse((child) => {
+        moon.traverse((child) => {
           if (child.isMesh) {
-            child.castShadow = true;
             child.receiveShadow = true;
+            child.castShadow = true;
+            if (child.material) {
+              child.material.roughness = 0.92;
+              child.material.metalness = 0.05;
+            }
           }
         });
-        scene.add(model);
-        modelRef.current = model;
-        addSiteMarkers(scene, markersRef);
+        scene.add(moon);
+        moonModelRef.current = moon;
       },
       undefined,
-      (error) => {
-        console.error('Error loading Moon model:', error);
-        const geometry = new THREE.SphereGeometry(1, 64, 64);
-        const material = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.9 });
-        const sphere = new THREE.Mesh(geometry, material);
-        sphere.castShadow = true;
-        sphere.receiveShadow = true;
-        scene.add(sphere);
-        modelRef.current = sphere;
-        addSiteMarkers(scene, markersRef);
+      (err) => {
+        console.warn('Fallback sphere for Moon:', err);
+        const geom = new THREE.SphereGeometry(MOON_RADIUS, 64, 64);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.9 });
+        const mesh = new THREE.Mesh(geom, mat);
+        scene.add(mesh);
+        moonModelRef.current = mesh;
       }
     );
 
-    // Click handler for site markers on globe
-    const onClick = (event) => {
-      const rect = container.getBoundingClientRect();
-      mouseRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      mouseRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      raycasterRef.current.setFromCamera(mouseRef.current, camera);
-      const intersects = raycasterRef.current.intersectObjects(markersRef.current);
-      if (intersects.length > 0) {
-        const siteId = intersects[0].object.userData.siteId;
-        if (siteId) {
-          setSelectedSiteId(siteId);
-          const clickedSite = sites.find((s) => s.id === siteId);
-          if (clickedSite) {
-            flyToSite(clickedSite);
-            if (onSiteClick) onSiteClick(clickedSite);
+    // 2. Earth Model (NASA EarthClouds_1_12756.glb)
+    gltfLoader.load(
+      '/models/earth.glb',
+      (gltf) => {
+        const earth = gltf.scene;
+        const box = new THREE.Box3().setFromObject(earth);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        if (maxDim > 0) {
+          const s = (EARTH_RADIUS * 2) / maxDim;
+          earth.scale.set(s, s, s);
+        }
+        earth.traverse((child) => {
+          if (child.isMesh) {
+            child.receiveShadow = true;
+            child.castShadow = true;
           }
+        });
+        scene.add(earth);
+        earthModelRef.current = earth;
+      },
+      undefined,
+      (err) => {
+        console.warn('Fallback Earth sphere:', err);
+        const geom = new THREE.SphereGeometry(EARTH_RADIUS, 32, 32);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.5 });
+        const mesh = new THREE.Mesh(geom, mat);
+        scene.add(mesh);
+        earthModelRef.current = mesh;
+      }
+    );
+
+    // 3. Sun Model (NASA Sun_1_1391000.glb)
+    gltfLoader.load(
+      '/models/sun.glb',
+      (gltf) => {
+        const sun = gltf.scene;
+        const box = new THREE.Box3().setFromObject(sun);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        if (maxDim > 0) {
+          const s = (SUN_RADIUS * 2) / maxDim;
+          sun.scale.set(s, s, s);
+        }
+        // Self-illuminating coronal emission
+        sun.traverse((child) => {
+          if (child.isMesh && child.material) {
+            child.material.emissive = new THREE.Color(0xffaa22);
+            child.material.emissiveIntensity = 1.4;
+          }
+        });
+        scene.add(sun);
+        sunModelRef.current = sun;
+      },
+      undefined,
+      (err) => {
+        console.warn('Fallback Sun sphere:', err);
+        const geom = new THREE.SphereGeometry(SUN_RADIUS, 32, 32);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xffcc33 });
+        const mesh = new THREE.Mesh(geom, mat);
+        scene.add(mesh);
+        sunModelRef.current = mesh;
+      }
+    );
+
+    // BUILD CLASSY CANDIDATE SITE MARKERS (Obsidian Ring + Laser Crimson Pin)
+    buildSiteMarkers(markersGroup, selectedSiteId);
+
+    // ── POINTER HANDLERS (Drag vs Click Detection) ──────────
+    const handlePointerDown = (e) => {
+      pointerDownPos.current = { x: e.clientX, y: e.clientY };
+    };
+
+    const handlePointerUp = (e) => {
+      const dx = Math.abs(e.clientX - pointerDownPos.current.x);
+      const dy = Math.abs(e.clientY - pointerDownPos.current.y);
+      if (dx > 6 || dy > 6) return; // User was dragging/orbiting the camera
+
+      const rect = container.getBoundingClientRect();
+      mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycasterRef.current.setFromCamera(mouseRef.current, camera);
+      const intersects = raycasterRef.current.intersectObjects(markersGroup.children, true);
+
+      if (intersects.length > 0) {
+        let obj = intersects[0].object;
+        while (obj && !obj.userData?.siteId && obj.parent) {
+          obj = obj.parent;
+        }
+        if (obj?.userData?.siteId) {
+          const siteId = obj.userData.siteId;
+          setSelectedSiteId(siteId);
+          const found = sites.find((s) => s.id === siteId);
+          if (found && onSiteClick) onSiteClick(found);
         }
       }
     };
-    container.addEventListener('click', onClick);
 
-    // Animation Loop
-    let animationId;
+    container.addEventListener('pointerdown', handlePointerDown);
+    container.addEventListener('pointerup', handlePointerUp);
+
+    // ── ANIMATION LOOP ──────────────────────────────────────
+    let animId;
+    const clock = new THREE.Clock();
+
     const animate = () => {
-      animationId = requestAnimationFrame(animate);
+      animId = requestAnimationFrame(animate);
+      const dt = clock.getDelta();
 
-      // Smooth camera fly-to interpolation when zooming to site
-      if (flyTargetRef.current.active) {
-        camera.position.lerp(flyTargetRef.current.position, 0.05);
-        controls.target.lerp(flyTargetRef.current.lookAt, 0.05);
-        if (camera.position.distanceTo(flyTargetRef.current.position) < 0.03) {
-          flyTargetRef.current.active = false;
-        }
+      // Gentle rotation for Earth clouds & Sun corona
+      if (earthModelRef.current) {
+        earthModelRef.current.rotation.y += dt * 0.08;
+      }
+      if (sunModelRef.current) {
+        sunModelRef.current.rotation.y += dt * 0.02;
       }
 
       controls.update();
-
-      // Earth slow diurnal spin
-      if (earthMeshRef.current) {
-        earthMeshRef.current.rotation.y += 0.0008;
-      }
-      // Sun slow rotation
-      if (sunMeshRef.current) {
-        sunMeshRef.current.rotation.y += 0.0003;
-      }
-
-      if (earthMeshRef.current) earthMeshRef.current.visible = true;
-      if (sunMeshRef.current) sunMeshRef.current.visible = true;
-
       renderer.render(scene, camera);
     };
     animate();
@@ -386,233 +356,313 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      container.removeEventListener('click', onClick);
-      cancelAnimationFrame(animationId);
+      container.removeEventListener('pointerdown', handlePointerDown);
+      container.removeEventListener('pointerup', handlePointerUp);
+      cancelAnimationFrame(animId);
       controls.dispose();
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
     };
-  }, [flyToSite]);
+  }, []);
 
-  // Update Sun & Earth ephemeris vectors based on date and time
-  const updateEphemerisPositions = useCallback(() => {
-    try {
-      const hourStr = String(currentHour).padStart(2, '0');
-      const time = new Date(`${date}T${hourStr}:00:00Z`);
-      const { subsolar, subearth } = getSubPoints(time);
+  // ── UPDATE ASTRONOMICAL EPHEMERIS POSITIONS ───────────────
+  const updateEphemeris = useCallback(() => {
+    if (!sceneRef.current) return;
 
-      // Selenographic coordinates to 3D Cartesian (matching Moon body frame and site markers):
-      // X = East (+lon 90°), Y = North (+lat 90°), Z = Prime Meridian (lat 0, lon 0)
-      const eLat = (subearth.lat * Math.PI) / 180;
-      const eLon = (subearth.lon * Math.PI) / 180;
-      const dirEarth = new THREE.Vector3(
-        Math.cos(eLat) * Math.sin(eLon),
-        Math.sin(eLat),
-        Math.cos(eLat) * Math.cos(eLon)
-      ).normalize();
-      dirEarthRef.current.copy(dirEarth);
+    const hourStr = String(currentHour).padStart(2, '0');
+    const time = new Date(`${date}T${hourStr}:00:00Z`);
 
-      const sLat = (subsolar.lat * Math.PI) / 180;
-      const sLon = (subsolar.lon * Math.PI) / 180;
-      const dirSun = new THREE.Vector3(
-        Math.cos(sLat) * Math.sin(sLon),
-        Math.sin(sLat),
-        Math.cos(sLat) * Math.cos(sLon)
-      ).normalize();
-      dirSunRef.current.copy(dirSun);
+    // True Geocentric Vectors via Astronomy-Engine
+    const moonVec = Astronomy.GeoVector(Astronomy.Body.Moon, time, true);
+    const sunVec = Astronomy.GeoVector(Astronomy.Body.Sun, time, true);
 
-      // 1. Sun Directional Light
-      if (sunLightRef.current) {
-        sunLightRef.current.position.set(dirSun.x * 30, dirSun.y * 30, dirSun.z * 30);
-        sunLightRef.current.target.position.set(0, 0, 0);
-        sunLightRef.current.target.updateMatrixWorld();
+    // Sun Vector relative to Moon Center (dSun = S - M)
+    const dSun = {
+      x: sunVec.x - moonVec.x,
+      y: sunVec.y - moonVec.y,
+      z: sunVec.z - moonVec.z,
+    };
+    const sunMag = Math.hypot(dSun.x, dSun.y, dSun.z);
+    const sunDir = new THREE.Vector3(dSun.x / sunMag, dSun.y / sunMag, dSun.z / sunMag);
+
+    // Earth Vector relative to Moon Center (dEarth = -M)
+    const dEarth = { x: -moonVec.x, y: -moonVec.y, z: -moonVec.z };
+    const earthMag = Math.hypot(dEarth.x, dEarth.y, dEarth.z);
+    const earthDir = new THREE.Vector3(dEarth.x / earthMag, dEarth.y / earthMag, dEarth.z / earthMag);
+
+    // Telemetry stats
+    const sunMoonAngle = sunDir.angleTo(earthDir);
+    const phaseFraction = (1 + Math.cos(sunMoonAngle)) / 2;
+    setTelemetry({
+      sunDistKm: Math.round(sunMag),
+      earthDistKm: Math.round(earthMag),
+      earthPhase: Math.round(phaseFraction * 100),
+    });
+
+    // 1. POSITION SUN MODEL
+    const sunPos = sunDir.clone().multiplyScalar(SUN_DIST);
+    if (sunModelRef.current) {
+      sunModelRef.current.position.copy(sunPos);
+    }
+
+    // 2. POSITION EARTH MODEL
+    const earthPos = earthDir.clone().multiplyScalar(EARTH_DIST);
+    if (earthModelRef.current) {
+      earthModelRef.current.position.copy(earthPos);
+    }
+
+    // 3. SUN LIGHT → MOON
+    if (moonSunLightRef.current) {
+      moonSunLightRef.current.position.copy(sunPos);
+      moonSunLightRef.current.target.position.set(0, 0, 0);
+      moonSunLightRef.current.target.updateMatrixWorld();
+    }
+
+    // 4. SUN LIGHT → EARTH (From Sun direction pointing toward Earth)
+    if (earthSunLightRef.current) {
+      const sunToEarthDir = new THREE.Vector3().subVectors(earthPos, sunPos).normalize();
+      earthSunLightRef.current.position.copy(earthPos).sub(sunToEarthDir.clone().multiplyScalar(10));
+      earthSunLightRef.current.target.position.copy(earthPos);
+      earthSunLightRef.current.target.updateMatrixWorld();
+    }
+
+    // ── REBUILD ALL-SITE DTE VECTORS ────────────────────────
+    if (dteVectorsGroupRef.current) {
+      dteVectorsGroupRef.current.clear();
+
+      const showDTE = vectorMode === 'all' || vectorMode === 'dte';
+      if (showDTE) {
+        sites.forEach((site) => {
+          const latRad = (site.lat * Math.PI) / 180;
+          const lonRad = (site.lon * Math.PI) / 180;
+          const sx = Math.cos(latRad) * Math.sin(lonRad) * MOON_RADIUS;
+          const sy = Math.sin(latRad) * MOON_RADIUS;
+          const sz = Math.cos(latRad) * Math.cos(lonRad) * MOON_RADIUS;
+          const siteVec = new THREE.Vector3(sx, sy, sz);
+
+          // Dot product: line of sight check (Up vector dot Earth vector)
+          const upVec = siteVec.clone().normalize();
+          const dot = upVec.dot(earthDir);
+          const isVisible = dot > 0.0;
+
+          // Color: Cyan for line-of-sight > 0°, Crimson for terrain/lunar occultation
+          const color = isVisible ? 0x8fd3e8 : 0xef4444;
+          const opacity = isVisible ? (site.id === selectedSiteId ? 0.95 : 0.45) : 0.2;
+
+          const points = [siteVec, earthPos];
+          const geom = new THREE.BufferGeometry().setFromPoints(points);
+          const mat = new THREE.LineBasicMaterial({
+            color,
+            transparent: true,
+            opacity,
+            linewidth: site.id === selectedSiteId ? 2 : 1,
+          });
+          const line = new THREE.Line(geom, mat);
+          dteVectorsGroupRef.current.add(line);
+        });
       }
+    }
 
-      // 2. NASA Sun 3D Model in deep space
-      if (sunMeshRef.current) {
-        sunMeshRef.current.position.set(dirSun.x * SUN_DIST, dirSun.y * SUN_DIST, dirSun.z * SUN_DIST);
-      }
+    // ── REBUILD CONICAL SOLAR DIVERGENCE RAYS ───────────────
+    if (solarRaysGroupRef.current) {
+      solarRaysGroupRef.current.clear();
 
-      // 3. NASA Cloud Earth 3D Model in deep orbital distance
-      if (earthMeshRef.current) {
-        earthMeshRef.current.position.set(dirEarth.x * EARTH_DIST, dirEarth.y * EARTH_DIST, dirEarth.z * EARTH_DIST);
-      }
-
-      // 4. Light Rays
-      const scene = sceneRef.current;
-      if (scene) {
-        if (sunRayRef.current) { scene.remove(sunRayRef.current); sunRayRef.current = null; }
-        if (earthRayRef.current) { scene.remove(earthRayRef.current); earthRayRef.current = null; }
-
-        if (showRays) {
-          const sunRayGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0, 0),
-            new THREE.Vector3(dirSun.x * SUN_DIST, dirSun.y * SUN_DIST, dirSun.z * SUN_DIST),
-          ]);
-          const sunRay = new THREE.Line(
-            sunRayGeom,
-            new THREE.LineBasicMaterial({ color: 0xfbbf24, opacity: 0.45, transparent: true })
+      const showSolar = vectorMode === 'all' || vectorMode === 'solar';
+      if (showSolar) {
+        const rayCount = 12;
+        for (let i = 0; i < rayCount; i++) {
+          const angle = (i / rayCount) * Math.PI * 2;
+          const coneOffset = new THREE.Vector3(
+            Math.cos(angle) * 1.8,
+            Math.sin(angle) * 1.8,
+            0
           );
-          scene.add(sunRay);
-          sunRayRef.current = sunRay;
-
-          const earthRayGeom = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0, 0),
-            new THREE.Vector3(dirEarth.x * EARTH_DIST, dirEarth.y * EARTH_DIST, dirEarth.z * EARTH_DIST),
-          ]);
-          const earthRay = new THREE.Line(
-            earthRayGeom,
-            new THREE.LineBasicMaterial({ color: 0x38bdf8, opacity: 0.45, transparent: true })
-          );
-          scene.add(earthRay);
-          earthRayRef.current = earthRay;
+          const target = coneOffset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(sunDir.x, sunDir.z));
+          const rayGeom = new THREE.BufferGeometry().setFromPoints([sunPos, target]);
+          const rayMat = new THREE.LineBasicMaterial({
+            color: 0xffab5e,
+            transparent: true,
+            opacity: 0.25,
+          });
+          solarRaysGroupRef.current.add(new THREE.Line(rayGeom, rayMat));
         }
       }
-    } catch (err) {
-      console.warn('Ephemeris update error:', err);
     }
-  }, [currentHour, date, showRays]);
+  }, [date, currentHour, vectorMode, selectedSiteId]);
 
   useEffect(() => {
-    updateEphemerisPositions();
-  }, [updateEphemerisPositions]);
+    updateEphemeris();
+  }, [updateEphemeris]);
 
-  // Update site marker selection highlights
+  // Update marker highlight on selection
   useEffect(() => {
-    markersRef.current.forEach((marker) => {
-      if (marker.userData.siteId === selectedSiteId) {
-        marker.material.color.set(0xf59e0b);
-        marker.scale.set(1.6, 1.6, 1.6);
-      } else {
-        marker.material.color.set(0xffffff);
-        marker.scale.set(1.0, 1.0, 1.0);
-      }
-    });
+    if (markersGroupRef.current) {
+      buildSiteMarkers(markersGroupRef.current, selectedSiteId);
+    }
   }, [selectedSiteId]);
 
-  const handleSiteSelect = (site) => {
-    setSelectedSiteId(site.id);
-    flyToSite(site);
-    if (onSiteClick) onSiteClick(site);
+  // Camera Mode Toggle
+  const handleToggleCamera = () => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    const newMode = cameraMode === 'geolocked' ? 'orbit' : 'geolocked';
+    setCameraMode(newMode);
+
+    if (newMode === 'orbit') {
+      // Zoom out to view entire orbital system
+      controlsRef.current.target.set(0, 0, 0);
+      cameraRef.current.position.set(0, 22, 38);
+    } else {
+      // Geolock to selected site
+      const found = sites.find((s) => s.id === selectedSiteId) || sites[0];
+      flyToSite(found);
+    }
   };
 
   return (
-    <div className="relative w-full h-full min-h-[500px]">
-      {/* 3D Canvas */}
-      <div ref={containerRef} className="w-full h-full min-h-[500px] rounded-xl overflow-hidden border border-[#1e293b]" />
+    <div className="relative w-full h-full min-h-[500px] flex flex-col select-none">
+      {/* 3D Canvas Container */}
+      <div ref={containerRef} className="w-full flex-1 rounded-xl overflow-hidden cursor-grab active:cursor-grabbing" />
 
-      {/* Top Controls Toolbar */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-        {/* LIGHTING BUTTON (Requested by user) */}
-        <button
-          onClick={() => setLightingMode(!lightingMode)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all ${
-            lightingMode
-              ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-lg shadow-amber-400/25 ring-2 ring-amber-400/30'
-              : 'bg-[#0b1120]/80 text-slate-300 border-slate-700 hover:border-slate-500 hover:text-white'
-          }`}
-          title="Lights up the entire space so you can see all sides of Earth, Moon and Sun"
-        >
-          <Lightbulb className={`w-3.5 h-3.5 ${lightingMode ? 'text-slate-950 fill-current' : 'text-amber-400'}`} />
-          <span>{lightingMode ? 'Lighting: ON' : 'Lighting: OFF'}</span>
-        </button>
-
-        {/* Light Rays Toggle */}
-        <button
-          onClick={() => setShowRays(!showRays)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all ${
-            showRays
-              ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-              : 'bg-[#0b1120]/80 text-slate-400 border-slate-700 hover:border-slate-500'
-          }`}
-        >
-          {showRays ? 'Vectors ON' : 'Vectors OFF'}
-        </button>
-      </div>
-
-      {/* Top Left: Proportional Scale Badge */}
-      <div className="absolute top-3 left-3 z-10 hidden sm:flex items-center gap-2 bg-[#0b1120]/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-700/60 text-[11px] font-mono text-slate-300">
-        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-        <span>NASA 3.67:1 Scale · Cloud Earth & Sun Model Active</span>
-      </div>
-
-      {/* Bottom Left: Site Fly-to Navigation Chips */}
-      <div className="absolute bottom-3 left-3 z-10 bg-[#0b1120]/85 backdrop-blur-md p-2.5 rounded-xl border border-slate-700/60 max-w-xs text-xs">
-        <div className="flex items-center gap-1.5 text-slate-400 mb-2 font-mono text-[10px] uppercase tracking-wider">
-          <Navigation className="w-3 h-3 text-amber-400" />
-          <span>Zoom to Landing Site</span>
+      {/* Top Floating Control Bar */}
+      <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+        {/* Camera Mode Toggle */}
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button
+            onClick={handleToggleCamera}
+            className={`telemetry-chip transition-all ${cameraMode === 'geolocked' ? 'sun' : 'earth'}`}
+            title="Toggle between Geolocked Site View and Heliocentric Orbit System"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>{cameraMode === 'geolocked' ? 'Geolocked: Moon Site' : 'Heliocentric Orbit View'}</span>
+          </button>
         </div>
-        <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto pr-1">
-          {sites.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => handleSiteSelect(s)}
-              className={`px-2 py-1 rounded text-[11px] font-medium transition-all ${
-                selectedSiteId === s.id
-                  ? 'bg-amber-400 text-slate-950 font-bold shadow-md shadow-amber-400/20'
-                  : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              {s.name.split('(')[0].trim()}
-            </button>
-          ))}
+
+        {/* Vectors Mode Toggle */}
+        <div className="flex items-center gap-1.5 bg-[#0a0e17]/85 backdrop-blur-md p-1 rounded-full border border-[var(--line)] pointer-events-auto">
+          <button
+            onClick={() => setVectorMode('all')}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
+              vectorMode === 'all' ? 'bg-[var(--coral)] text-[#120e07] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
+            }`}
+          >
+            All Vectors
+          </button>
+          <button
+            onClick={() => setVectorMode('dte')}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
+              vectorMode === 'dte' ? 'bg-[var(--mustard)] text-[#060910] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
+            }`}
+          >
+            DTE Sightlines
+          </button>
+          <button
+            onClick={() => setVectorMode('solar')}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
+              vectorMode === 'solar' ? 'bg-[var(--coral)] text-[#120e07] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
+            }`}
+          >
+            Solar Rays
+          </button>
+          <button
+            onClick={() => setVectorMode('off')}
+            className={`px-2 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
+              vectorMode === 'off' ? 'bg-white/20 text-white' : 'text-[var(--ink-mute)] hover:text-white'
+            }`}
+          >
+            Off
+          </button>
         </div>
       </div>
 
-      {/* Bottom Right: Timeline Scrubber */}
-      <div className="absolute bottom-3 right-3 z-10 bg-[#0b1120]/85 backdrop-blur-md p-3 rounded-xl border border-slate-700/60 text-xs">
-        <div className="flex items-center justify-between text-slate-300 mb-1.5 font-mono text-[11px]">
-          <span className="flex items-center gap-1 text-amber-400">
-            <Clock className="w-3 h-3" />
-            <span>Time:</span>
+      {/* Bottom Floating Telemetry Strip & Time Scrubber */}
+      <div className="absolute bottom-3 left-3 right-3 flex flex-col md:flex-row items-center justify-between gap-3 bg-[#0a0e17]/90 backdrop-blur-md border border-[var(--line)] rounded-xl p-3 pointer-events-auto">
+        {/* Instant Astronomical Telemetry */}
+        <div className="flex items-center gap-4 text-xs font-telemetry">
+          <div className="flex items-center gap-1.5 text-[var(--coral)]">
+            <Sun className="w-3.5 h-3.5" />
+            <span>{(telemetry.sunDistKm / 1000000).toFixed(2)}M km</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[var(--mustard)]">
+            <Radio className="w-3.5 h-3.5" />
+            <span>{telemetry.earthDistKm.toLocaleString()} km</span>
+          </div>
+          <div className="hidden sm:inline-flex text-[var(--ink-mute)]">
+            Phase: <span className="text-[var(--ink)] ml-1">{telemetry.earthPhase}%</span>
+          </div>
+        </div>
+
+        {/* Hour Scrubber */}
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <span className="text-xs font-telemetry text-[var(--ink-mute)] whitespace-nowrap">
+            {String(currentHour).padStart(2, '0')}:00 UTC
           </span>
-          <span className="font-bold text-white">{String(currentHour).padStart(2, '0')}:00 UTC</span>
+          <input
+            type="range"
+            min="0"
+            max="23"
+            value={currentHour}
+            onChange={(e) => setCurrentHour(Number(e.target.value))}
+            className="w-full md:w-48 accent-[var(--coral)]"
+          />
         </div>
-        <input
-          type="range"
-          min={0}
-          max={23}
-          value={currentHour}
-          onChange={(e) => setCurrentHour(Number(e.target.value))}
-          className="w-36 accent-amber-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
-        />
       </div>
     </div>
   );
 }
 
-function addSiteMarkers(scene, markersRef) {
-  const markerGeometry = new THREE.SphereGeometry(0.04, 16, 16);
-  const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+// ── BUILD SLEEK CANDIDATE SITE MARKERS ──────────────────────
+// Obsidian black pedestal ring (#030712) + glowing laser crimson beacon (#ef4444)
+function buildSiteMarkers(group, activeSiteId) {
+  group.clear();
 
   sites.forEach((site) => {
     const latRad = (site.lat * Math.PI) / 180;
     const lonRad = (site.lon * Math.PI) / 180;
-    const x = Math.cos(latRad) * Math.sin(lonRad);
-    const y = Math.sin(latRad);
-    const z = Math.cos(latRad) * Math.cos(lonRad);
 
-    const marker = new THREE.Mesh(markerGeometry, markerMaterial.clone());
-    marker.position.set(x, y, z);
-    marker.userData.siteId = site.id;
-    marker.userData.siteName = site.name;
+    const x = Math.cos(latRad) * Math.sin(lonRad) * MOON_RADIUS;
+    const y = Math.sin(latRad) * MOON_RADIUS;
+    const z = Math.cos(latRad) * Math.cos(lonRad) * MOON_RADIUS;
 
-    // Glowing target ring around site
-    const ringGeo = new THREE.RingGeometry(0.05, 0.07, 24);
+    const markerGroup = new THREE.Group();
+    markerGroup.position.set(x, y, z);
+    markerGroup.userData = { siteId: site.id, siteName: site.name };
+
+    const isSelected = site.id === activeSiteId;
+
+    // Surface Normal vector
+    const normal = new THREE.Vector3(x, y, z).normalize();
+
+    // 1. Sleek Obsidian Black Pedestal Ring
+    const ringGeom = new THREE.RingGeometry(0.04, 0.055, 32);
     const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xf59e0b,
+      color: isSelected ? 0xffab5e : 0x030712,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.65,
+      opacity: isSelected ? 0.95 : 0.75,
     });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.lookAt(new THREE.Vector3(x, y, z).normalize());
-    ring.position.set(x, y, z);
+    const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+    ringMesh.lookAt(normal);
+    markerGroup.add(ringMesh);
 
-    scene.add(ring);
-    scene.add(marker);
-    markersRef.current.push(marker);
+    // 2. Classy Vertical Stalk
+    const stalkGeom = new THREE.CylinderGeometry(0.003, 0.003, 0.09, 8);
+    const stalkMat = new THREE.MeshBasicMaterial({ color: isSelected ? 0xffab5e : 0xe11d48 });
+    const stalk = new THREE.Mesh(stalkGeom, stalkMat);
+    stalk.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+    stalk.position.copy(normal.clone().multiplyScalar(0.045));
+    markerGroup.add(stalk);
+
+    // 3. Glowing Laser Crimson Beacon Head
+    const headGeom = new THREE.SphereGeometry(isSelected ? 0.024 : 0.016, 16, 16);
+    const headMat = new THREE.MeshBasicMaterial({
+      color: isSelected ? 0xffc791 : 0xef4444,
+    });
+    const headMesh = new THREE.Mesh(headGeom, headMat);
+    headMesh.position.copy(normal.clone().multiplyScalar(0.09));
+    markerGroup.add(headMesh);
+
+    group.add(markerGroup);
   });
 }

@@ -1,19 +1,18 @@
 // src/components/MoonAssistant.jsx
 // AI-powered educational chatbot using Gemini 2.0 Flash
-// Supports both floating FAB mode and full embedded mode
+// Architectural Blue & Silver Theme · Embedded and Floating Modes
 
 import { useState, useRef, useEffect } from 'react';
 import { Bot, Send, X, Sparkles, Trash2, MessageCircle } from 'lucide-react';
 
 const SUGGESTED_QUESTIONS = [
-  "Why is the Moon's south pole important for NASA?",
+  "Why is the Moon's south pole the prime target for Artemis?",
   "What is a permanently shadowed region (PSR)?",
-  "How does solar power work at the lunar south pole?",
-  "What is Direct-to-Earth communication?",
-  "Why does Earth appear to hover near the horizon from the south pole?",
-  "What is lunar libration and how does it affect Earth visibility?",
-  "How cold are the permanently shadowed craters?",
-  "What is the significance of water ice on the Moon?",
+  "How does solar power work when the Sun skims the lunar horizon?",
+  "What is Direct-to-Earth communication and how does libration affect it?",
+  "Why does Earth hover near the horizon from the south pole?",
+  "How cold are the crater floors at the lunar south pole?",
+  "How does lunar topography affect solar panel incidence angles?",
 ];
 
 export default function MoonAssistant({ site, date, power, comm, embedded = false }) {
@@ -23,7 +22,6 @@ export default function MoonAssistant({ site, date, power, comm, embedded = fals
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // Auto scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -41,34 +39,24 @@ export default function MoonAssistant({ site, date, power, comm, embedded = fals
         ...prev,
         {
           role: 'assistant',
-          text: '🔑 **API Key Required**\n\nThe Moon Assistant needs a Gemini API key to function.\n\n1. Get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)\n2. Create a `.env` file in the project root\n3. Add: `VITE_GEMINI_API_KEY=your_key_here`\n4. Restart the dev server\n\nIn the meantime, explore the site data — all scientific computations work without an API key!',
+          text: '🔑 **Gemini API Key Required**\n\nThe Moon Assistant uses Gemini 2.0 Flash for interactive Q&A.\n\n1. Generate a key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)\n2. Add to `.env`: `VITE_GEMINI_API_KEY=your_key_here`\n3. Restart the dev server\n\nAll real scientific telemetry, LDEM terrain models, and ephemeris algorithms remain fully operational without an API key!',
         },
       ]);
       setLoading(false);
       return;
     }
 
-    const systemPrompt = `You are the Moon Assistant, an enthusiastic and knowledgeable AI educator for the Lunar Landing Site Navigator — a tool built for NASA's 2026 Space Apps Challenge.
-
-Your personality: Friendly, passionate about space exploration, encouraging curiosity. Use analogies and vivid descriptions. Keep responses concise (2-4 paragraphs max) but information-dense.
-
-Current context that you can reference:
-- Selected site: ${site?.name || 'None'} at latitude ${site?.lat || 0}°, longitude ${site?.lon || 0}°
-- Mission: ${site?.mission || 'Unknown'}
-- Current date: ${date}
-- Solar conditions: Sun above horizon for ${power?.hours || 0} hours in the next 24h, average altitude ${power?.avgAlt?.toFixed(1) || 0}°, panel efficiency ${power?.avgEfficiency || 0}%
-- Communication: Earth visible for ${comm?.hours || 0} hours, availability ${comm?.availabilityPercent || 0}%
-- Site info: ${site?.whyNASAChose || ''}
-- Fun fact: ${site?.funFact || ''}
-- Target region: ${site?.targetRegion || 'Lunar South Pole'}
-- Science goals: ${site?.keyScienceGoals?.join(', ') || 'Unknown'}
-
-Rules:
-- Always relate answers to the current site context when relevant
-- Cite real NASA missions, instruments, and data when possible
-- If asked about ephemeris accuracy, mention our NASA DE421 cross-validation
-- Use emoji sparingly but effectively (🌙 🌍 ☀️ 🛰️)
-- If unsure about something, say so honestly`;
+    const systemPrompt = `You are Awilix, an authoritative, scientifically rigorous AI specialist in lunar south pole exploration, ephemeris orbital geometry, and the NASA 2026 Space Apps Challenge.
+Keep answers concise, elegant, and informative.
+Current site context:
+- Site: ${site?.name || 'South Pole'} at ${site?.lat || -89.9}°S, ${site?.lon || 0.0}°E
+- Mission: ${site?.mission || 'CLPS / Artemis'}
+- Date: ${date}
+- Sunlight window: ${power?.hours || 0}h (avg alt ${power?.avgAlt?.toFixed(1) || 0}°)
+- Direct-to-Earth window: ${comm?.hours || 0}h (uptime ${comm?.availabilityPercent || 0}%)
+- Terrain relief: ${site?.elevationReliefM || 4000} m
+- Scientific purpose: ${site?.whyNASAChose || ''}
+Always cite NASA primary sources (LDEM, LOLA, DE421, LRO) when appropriate.`;
 
     try {
       const response = await fetch(
@@ -85,78 +73,84 @@ Rules:
               { role: 'user', parts: [{ text: systemPrompt + '\n\nUser question: ' + userMsg }] },
             ],
             generationConfig: {
-              temperature: 0.7,
+              temperature: 0.65,
               maxOutputTokens: 800,
             },
           }),
         }
       );
       const data = await response.json();
-      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
+      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Unable to retrieve answer.';
       setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
     } catch (e) {
-      setMessages((prev) => [...prev, { role: 'assistant', text: '⚠️ Error: ' + e.message }]);
+      setMessages((prev) => [...prev, { role: 'assistant', text: 'Error connecting to Gemini: ' + e.message }]);
     }
     setLoading(false);
   };
 
-  // ── Embedded Full-page Mode ──
+  // ── Embedded Mode ─────────────────────────────────────────
   if (embedded) {
     return (
-      <div className="glass-card flex flex-col" style={{ minHeight: 'calc(100vh - 160px)' }}>
+      <div className="bento-plate flex flex-col" style={{ minHeight: 'calc(100vh - 180px)' }}>
         {/* Header */}
-        <div className="p-5 border-b border-[#1e293b] flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
-            <Bot className="w-5 h-5 text-black" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="font-bold text-white">Moon Assistant</h2>
-              <span className="text-[10px] font-mono bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-1.5 py-0.5 rounded">
-                Gemini 2.0 Flash
-              </span>
+        <div className="p-5 border-b border-[var(--line-soft)] flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[rgba(255,171,94,0.12)] border border-[rgba(255,171,94,0.3)] flex items-center justify-center">
+              <Bot className="w-5 h-5 text-[var(--coral)]" />
             </div>
-            <p className="text-[11px] text-slate-400">
-              Ask anything about lunar science, this site, or mission planning
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-bold text-[var(--ink)] font-sans">Awilix Mission Assistant</h2>
+                <span className="telemetry-chip terrain text-[10px] py-0.5 px-2">
+                  Gemini 2.0 Flash
+                </span>
+              </div>
+              <p className="text-xs text-[var(--ink-mute)] font-sans">
+                Interactive educational guide for lunar south pole exploration
+              </p>
+            </div>
           </div>
+
           {messages.length > 0 && (
             <button
               onClick={() => setMessages([])}
-              className="ml-auto p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-400/10 transition-all"
-              title="Clear chat"
+              className="p-2 rounded-lg text-[var(--ink-mute)] hover:text-[var(--crimson)] hover:bg-white/5 transition-colors"
+              title="Clear transcript"
             >
               <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        {/* Messages */}
+        {/* Message Stream */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {messages.length === 0 && (
-            <div className="space-y-4">
-              <div className="text-center py-8">
-                <div className="text-4xl mb-3">🌙</div>
-                <h3 className="text-base font-semibold text-white mb-1">Welcome to the Moon Assistant</h3>
-                <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  I'm here to help you understand lunar south pole exploration, the science behind this tool,
-                  and the fascinating physics of our nearest celestial neighbor.
+            <div className="space-y-6 py-6 text-center max-w-xl mx-auto">
+              <div className="w-12 h-12 rounded-full border border-[var(--line)] bg-[var(--paper-dark)] flex items-center justify-center mx-auto text-xl text-[var(--coral)]">
+                ☾
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[var(--ink)] font-sans mb-1">
+                  How can I assist your mission planning?
+                </h3>
+                <p className="text-xs text-[var(--ink-mute)] font-sans leading-relaxed">
+                  Ask about solar grazing angles, line-of-sight communication with NASA DSN,
+                  topographic relief from LOLA LDEM, or candidate landing site science.
                 </p>
               </div>
 
-              {/* Suggested Questions */}
-              <div className="max-w-lg mx-auto">
-                <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-3 text-center">
-                  Try asking...
+              <div className="space-y-2 text-left">
+                <div className="text-[10px] font-mono uppercase text-[var(--ink-faint)] text-center">
+                  Recommended Inquiries
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {SUGGESTED_QUESTIONS.map((q, i) => (
                     <button
                       key={i}
                       onClick={() => sendMessage(q)}
-                      className="text-left px-3 py-2.5 rounded-lg bg-[#111827] border border-[#1e293b] text-xs text-slate-300 hover:border-amber-400/30 hover:text-amber-300 transition-all"
+                      className="text-left p-3 rounded-xl bg-[var(--paper-dark)] border border-[var(--line-soft)] text-xs text-[var(--ink-soft)] hover:border-[var(--coral)] hover:text-white transition-colors cursor-pointer"
                     >
-                      <Sparkles className="w-3 h-3 text-amber-400/50 inline mr-1.5" />
+                      <Sparkles className="w-3 h-3 text-[var(--coral)] inline mr-2" />
                       {q}
                     </button>
                   ))}
@@ -171,15 +165,15 @@ Rules:
               className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] p-3.5 rounded-2xl text-sm leading-relaxed ${
+                className={`max-w-[80%] p-4 rounded-xl text-xs leading-relaxed font-sans ${
                   m.role === 'user'
-                    ? 'bg-amber-400/10 border border-amber-400/20 text-white rounded-br-md'
-                    : 'bg-[#111827] border border-[#1e293b] text-slate-200 rounded-bl-md'
+                    ? 'bg-[rgba(255,171,94,0.12)] border border-[rgba(255,171,94,0.3)] text-[var(--ink)]'
+                    : 'bg-[var(--paper-dark)] border border-[var(--line-soft)] text-[var(--ink-soft)]'
                 }`}
               >
                 {m.role === 'assistant' && (
-                  <div className="flex items-center gap-1.5 mb-1.5 text-[10px] text-amber-400/60 font-mono">
-                    <Bot className="w-3 h-3" /> Moon Assistant
+                  <div className="flex items-center gap-1.5 mb-1.5 text-[10px] text-[var(--coral)] font-mono">
+                    <Bot className="w-3 h-3" /> Awilix Assistant
                   </div>
                 )}
                 <div className="whitespace-pre-wrap">{m.text}</div>
@@ -189,38 +183,34 @@ Rules:
 
           {loading && (
             <div className="flex justify-start">
-              <div className="bg-[#111827] border border-[#1e293b] rounded-2xl rounded-bl-md px-4 py-3">
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  <div className="flex gap-1">
-                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
-                  Thinking...
-                </div>
+              <div className="bg-[var(--paper-dark)] border border-[var(--line-soft)] rounded-xl px-4 py-3 text-xs text-[var(--ink-mute)] flex items-center gap-2">
+                <span className="w-1.5 h-1.5 bg-[var(--coral)] rounded-full animate-bounce" />
+                <span className="w-1.5 h-1.5 bg-[var(--coral)] rounded-full animate-bounce [animation-delay:150ms]" />
+                <span className="w-1.5 h-1.5 bg-[var(--coral)] rounded-full animate-bounce [animation-delay:300ms]" />
+                <span>Formulating response...</span>
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
-        <div className="p-4 border-t border-[#1e293b]">
+        {/* Input Bar */}
+        <div className="p-4 border-t border-[var(--line-soft)] bg-[var(--paper-dark)]">
           <div className="flex gap-2">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-              placeholder="Ask about the Moon, this site, or lunar science..."
-              className="flex-1 bg-[#0c1222] border border-[#1e293b] rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400/40 transition-colors"
+              placeholder="Ask anything about lunar ephemeris, topography, or landing sites..."
+              className="flex-1 bg-[var(--bone)] border border-[var(--line)] rounded-xl px-4 py-2.5 text-xs text-[var(--ink)] placeholder-[var(--ink-faint)] focus:outline-none focus:border-[var(--coral)]"
             />
             <button
               onClick={() => sendMessage()}
               disabled={!input.trim() || loading}
-              className="px-4 py-2.5 rounded-xl bg-amber-400 text-black font-semibold text-sm hover:bg-amber-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md shadow-amber-400/20"
+              className="btn-primary text-xs py-2 px-4 disabled:opacity-40"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -228,58 +218,46 @@ Rules:
     );
   }
 
-  // ── Floating FAB Mode ──
+  // ── Floating Button Mode ──────────────────────────────────
   return (
     <>
-      {/* FAB Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-5 right-5 z-50 w-12 h-12 rounded-2xl flex items-center justify-center shadow-xl transition-all duration-300 ${
-          isOpen
-            ? 'bg-[#111827] border border-[#1e293b] rotate-0'
-            : 'bg-gradient-to-br from-amber-400 to-amber-600 shadow-amber-500/30 hover:scale-105'
-        }`}
+        className="fixed bottom-5 right-5 z-50 w-12 h-12 rounded-full flex items-center justify-center shadow-2xl transition-transform hover:scale-105 bg-[var(--coral)] text-[#120e07] cursor-pointer"
+        title="Open Lunar Mission Assistant"
       >
-        {isOpen ? (
-          <X className="w-5 h-5 text-slate-300" />
-        ) : (
-          <MessageCircle className="w-5 h-5 text-black" />
-        )}
+        {isOpen ? <X className="w-5 h-5 text-[#120e07]" /> : <MessageCircle className="w-5 h-5 text-[#120e07]" />}
       </button>
 
-      {/* Chat Popup */}
       {isOpen && (
-        <div className="fixed bottom-20 right-5 z-50 w-[360px] max-h-[500px] glass-card flex flex-col overflow-hidden animate-slide-in shadow-2xl shadow-black/50">
-          {/* Header */}
-          <div className="px-4 py-3 border-b border-[#1e293b] flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
-              <Bot className="w-3.5 h-3.5 text-black" />
-            </div>
-            <div className="flex-1">
-              <span className="text-xs font-bold text-white">Moon Assistant</span>
-              <span className="block text-[9px] text-slate-500 font-mono">Gemini 2.0 Flash</span>
+        <div className="fixed bottom-20 right-5 z-50 w-[380px] max-h-[520px] bento-plate flex flex-col overflow-hidden shadow-2xl animate-fade-in">
+          <div className="px-4 py-3 border-b border-[var(--line-soft)] flex items-center justify-between bg-[var(--paper-dark)]">
+            <div className="flex items-center gap-2">
+              <Bot className="w-4 h-4 text-[var(--coral)]" />
+              <span className="text-xs font-bold text-[var(--ink)] font-sans">Awilix Mission Assistant</span>
             </div>
             {messages.length > 0 && (
               <button
                 onClick={() => setMessages([])}
-                className="p-1.5 rounded text-slate-600 hover:text-red-400 transition-colors"
+                className="text-[var(--ink-mute)] hover:text-[var(--crimson)]"
                 title="Clear"
               >
-                <Trash2 className="w-3 h-3" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5" style={{ maxHeight: 340 }}>
+          <div className="flex-1 overflow-y-auto p-3.5 space-y-3" style={{ maxHeight: 360 }}>
             {messages.length === 0 && (
-              <div className="space-y-2 py-2">
-                <p className="text-[11px] text-slate-400 text-center">Ask about lunar science or this site!</p>
+              <div className="space-y-3 py-2 text-center">
+                <p className="text-xs text-[var(--ink-mute)]">
+                  Ask anything about the Moon or candidate sites!
+                </p>
                 {SUGGESTED_QUESTIONS.slice(0, 3).map((q, i) => (
                   <button
                     key={i}
                     onClick={() => sendMessage(q)}
-                    className="w-full text-left px-3 py-2 rounded-lg bg-[#0c1222] border border-[#1e293b] text-[11px] text-slate-400 hover:border-amber-400/30 hover:text-amber-300 transition-all"
+                    className="w-full text-left p-2.5 rounded-lg bg-[var(--paper-dark)] border border-[var(--line-soft)] text-[11px] text-[var(--ink-soft)] hover:text-white hover:border-[var(--coral)] transition-colors cursor-pointer"
                   >
                     {q}
                   </button>
@@ -290,10 +268,10 @@ Rules:
             {messages.map((m, i) => (
               <div
                 key={i}
-                className={`text-xs p-2.5 rounded-xl leading-relaxed ${
+                className={`text-xs p-3 rounded-xl leading-relaxed ${
                   m.role === 'user'
-                    ? 'bg-amber-400/10 border border-amber-400/20 text-white ml-6'
-                    : 'bg-[#0c1222] border border-[#1e293b] text-slate-300 mr-4'
+                    ? 'bg-[rgba(255,171,94,0.15)] text-[var(--ink)] ml-6'
+                    : 'bg-[var(--paper-dark)] text-[var(--ink-soft)] mr-4 border border-[var(--line-soft)]'
                 }`}
               >
                 <div className="whitespace-pre-wrap">{m.text}</div>
@@ -301,32 +279,27 @@ Rules:
             ))}
 
             {loading && (
-              <div className="text-[11px] text-slate-500 flex items-center gap-2 p-2">
-                <div className="flex gap-0.5">
-                  <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-                Thinking...
+              <div className="text-xs text-[var(--ink-mute)] flex items-center gap-1.5 p-2">
+                <span className="w-1.5 h-1.5 bg-[var(--coral)] rounded-full animate-bounce" />
+                <span>Thinking...</span>
               </div>
             )}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
-          <div className="p-3 border-t border-[#1e293b] flex gap-2">
+          <div className="p-3 border-t border-[var(--line-soft)] bg-[var(--paper-dark)] flex gap-2">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-              placeholder="Ask about the Moon..."
-              className="flex-1 bg-[#0c1222] border border-[#1e293b] rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400/40"
+              placeholder="Ask Awilix..."
+              className="flex-1 bg-[var(--bone)] border border-[var(--line)] rounded-lg px-3 py-2 text-xs text-[var(--ink)] focus:outline-none focus:border-[var(--coral)]"
             />
             <button
               onClick={() => sendMessage()}
               disabled={!input.trim() || loading}
-              className="px-3 py-2 rounded-lg bg-amber-400 text-black font-bold text-xs hover:bg-amber-300 disabled:opacity-40 transition-all"
+              className="btn-primary text-xs py-1.5 px-3"
             >
               <Send className="w-3.5 h-3.5" />
             </button>

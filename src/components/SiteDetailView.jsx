@@ -1,4 +1,7 @@
 // src/components/SiteDetailView.jsx
+// Classy Blue & Silver Telemetry and Science Detail View
+// Real NASA ephemeris calculations, interactive Recharts time series, and verified site facts.
+
 import { useState, useEffect, useMemo } from 'react';
 import { computePath, powerWindow, commWindow } from '../lib/ephemeris.js';
 import sites from '../data/sites.json';
@@ -20,12 +23,11 @@ import {
   Compass,
   Sparkles,
   Layers,
-  ThermometerSnowflake,
-  ShieldAlert,
   Award,
   ChevronRight,
   Mountain,
-  Globe2,
+  MapPin,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function SiteDetailView({
@@ -100,183 +102,155 @@ export default function SiteDetailView({
   const activePoint = chartData[hoverIndex] || chartData[0] || {};
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12">
-      {/* Top Banner: Site Header & Quick Switcher */}
-      <div className="bg-[#0b1329]/90 backdrop-blur-md border border-[#1e293b] rounded-2xl p-5 shadow-2xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+    <div className="space-y-6 animate-fade-in pb-10">
+      {/* ── Top Summary Header ─────────────────────────── */}
+      <div className="bento-plate p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="flex flex-wrap items-center gap-2 mb-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
-            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-wide">{site.name}</h1>
-            <span className="text-xs font-mono bg-amber-400/10 border border-amber-400/30 text-amber-300 px-2 py-0.5 rounded-full font-medium">
-              {site.lat}°, {site.lon}°
+          <div className="flex items-center gap-2">
+            <span className="telemetry-chip sun text-xs">
+              {site.lat.toFixed(1)}°S · {site.lon.toFixed(1)}°E
             </span>
-            <span className="text-xs font-mono bg-sky-500/10 border border-sky-500/30 text-sky-400 px-2 py-0.5 rounded-full">
+            <span className="text-[11px] font-mono text-[var(--ink-mute)]">
               {site.mission}
             </span>
           </div>
-          <p className="text-xs text-slate-300 max-w-2xl">{site.targetRegion} • {site.namedAfter}</p>
+          <h1 className="text-xl sm:text-2xl font-bold font-sans text-[var(--ink)] mt-1">
+            {site.name}
+          </h1>
+          <p className="text-xs text-[var(--ink-mute)] mt-0.5">
+            Named after: {site.namedAfter}
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
-          {/* Site Selector Dropdown */}
-          <select
-            value={site.id}
-            onChange={(e) => {
-              const target = sites.find((s) => s.id === e.target.value);
-              if (target) setSelectedSite(target);
-            }}
-            className="bg-[#070d1e] text-slate-200 text-xs border border-slate-700 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-amber-400 cursor-pointer"
-          >
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.lat}°)
-              </option>
-            ))}
-          </select>
-
-          {/* Visit 3D Terrain Action */}
-          <button
-            onClick={() => onVisitTerrain(site)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black font-semibold text-xs tracking-wide shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
-          >
-            <Mountain className="w-4 h-4" />
-            <span>Launch 3D Terrain</span>
-          </button>
-        </div>
+        <button
+          onClick={onVisitTerrain}
+          className="btn-primary text-xs"
+        >
+          <Mountain className="w-3.5 h-3.5" />
+          <span>Launch 3D Terrain Altimetry</span>
+        </button>
       </div>
 
-      {/* BENTO GRID ROW 1: Hero Analytics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Solar Illumination */}
-        <div className="bg-[#070d1e]/80 border border-[#1e293b] rounded-2xl p-4 shadow-xl flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-              <Sun className="w-4 h-4 text-amber-400" />
-              Power Window
+      {/* ── Row 1: KPI Metric Plates ───────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Solar Generation Span */}
+        <div className="bento-plate p-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-[var(--ink-soft)] flex items-center gap-1.5">
+              <Sun className="w-4 h-4 text-[var(--coral)]" />
+              Solar Span ({timeWindow})
             </span>
-            <span className="text-[10px] font-mono text-amber-400/80 bg-amber-400/10 px-2 py-0.5 rounded-full">
-              {timeRange}h Period
-            </span>
+            <span className="telemetry-chip sun text-[10px]">Active</span>
           </div>
-          <div>
-            <div className="text-3xl font-extrabold text-amber-400 tracking-tight">
+          <div className="mt-3">
+            <div className="text-3xl font-extrabold font-mono text-[var(--coral)]">
               {power.hours}h
             </div>
-            <div className="text-xs text-slate-400 mt-1 flex justify-between">
-              <span>Avg Sun Alt: <strong className="text-white">{power.avgAlt}°</strong></span>
-              <span>Max: <strong className="text-amber-300">{power.maxAlt}°</strong></span>
+            <div className="text-[11px] font-mono text-[var(--ink-mute)] mt-1 flex justify-between">
+              <span>Avg Alt: <strong className="text-[var(--ink)]">{power.avgAlt}°</strong></span>
+              <span>Peak: <strong className="text-[var(--ink)]">{power.maxAlt}°</strong></span>
             </div>
           </div>
-          <div className="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden mt-3">
+          <div className="w-full bg-[var(--paper-dark)] h-1.5 rounded-full overflow-hidden mt-3">
             <div
-              className="bg-amber-400 h-full rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, (power.hours / timeRange) * 100)}%` }}
+              className="bg-[var(--coral)] h-full rounded-full transition-all duration-300"
+              style={{ width: `${Math.min(100, (power.hours / (timeRange || 24)) * 100)}%` }}
             />
           </div>
         </div>
 
-        {/* Card 2: DTE Communications */}
-        <div className="bg-[#070d1e]/80 border border-[#1e293b] rounded-2xl p-4 shadow-xl flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-              <Radio className="w-4 h-4 text-sky-400" />
+        {/* DTE Comm Window */}
+        <div className="bento-plate p-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-[var(--ink-soft)] flex items-center gap-1.5">
+              <Radio className="w-4 h-4 text-[var(--mustard)]" />
               DTE Comm Window
             </span>
-            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-              comm.hours > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
-            }`}>
-              {comm.availabilityPercent}% Uptime
-            </span>
+            <span className="telemetry-chip earth text-[10px]">DSN Link</span>
           </div>
-          <div>
-            <div className="text-3xl font-extrabold text-sky-400 tracking-tight">
+          <div className="mt-3">
+            <div className="text-3xl font-extrabold font-mono text-[var(--mustard)]">
               {comm.hours}h
             </div>
-            <div className="text-xs text-slate-400 mt-1 flex justify-between">
-              <span>Avg Earth Alt: <strong className="text-white">{comm.avgAlt}°</strong></span>
-              <span>Status: <strong className="text-emerald-400">{comm.hours > 0 ? 'LINE OF SIGHT' : 'OCCULTED'}</strong></span>
+            <div className="text-[11px] font-mono text-[var(--ink-mute)] mt-1 flex justify-between">
+              <span>Avg Alt: <strong className="text-[var(--ink)]">{comm.avgAlt}°</strong></span>
+              <span>Uptime: <strong className="text-[var(--ink)]">{comm.availabilityPercent}%</strong></span>
             </div>
           </div>
-          <div className="w-full bg-slate-800/80 h-1.5 rounded-full overflow-hidden mt-3">
+          <div className="w-full bg-[var(--paper-dark)] h-1.5 rounded-full overflow-hidden mt-3">
             <div
-              className="bg-sky-400 h-full rounded-full transition-all duration-500"
+              className="bg-[var(--mustard)] h-full rounded-full transition-all duration-300"
               style={{ width: `${Math.min(100, comm.availabilityPercent)}%` }}
             />
           </div>
         </div>
 
-        {/* Card 3: Crater Dimensions */}
-        <div className="bg-[#070d1e]/80 border border-[#1e293b] rounded-2xl p-4 shadow-xl flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-              <Mountain className="w-4 h-4 text-purple-400" />
-              Topography Relief
+        {/* Topographic Relief */}
+        <div className="bento-plate p-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-[var(--ink-soft)] flex items-center gap-1.5">
+              <Mountain className="w-4 h-4 text-[var(--olive)]" />
+              Topographic Relief
             </span>
-            <span className="text-[10px] font-mono text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-full">
-              LOLA LDEM
-            </span>
+            <span className="text-[10px] font-mono text-[var(--ink-faint)]">NASA LOLA</span>
           </div>
-          <div>
-            <div className="text-3xl font-extrabold text-purple-300 tracking-tight">
-              {site.elevationReliefM ? `${site.elevationReliefM.toLocaleString()} m` : '4,200 m'}
+          <div className="mt-3">
+            <div className="text-3xl font-extrabold font-mono text-[var(--ink)]">
+              {site.elevationReliefM.toLocaleString()} m
             </div>
-            <div className="text-xs text-slate-400 mt-1 flex justify-between">
-              <span>Diameter: <strong className="text-white">{site.craterDiameterKm} km</strong></span>
-              <span>Depth: <strong className="text-white">{site.craterDepthKm} km</strong></span>
+            <div className="text-[11px] font-mono text-[var(--ink-mute)] mt-1 flex justify-between">
+              <span>Diameter: <strong className="text-[var(--ink)]">{site.craterDiameterKm} km</strong></span>
+              <span>Depth: <strong className="text-[var(--ink)]">{site.craterDepthKm} km</strong></span>
             </div>
           </div>
-          <div className="text-[11px] text-slate-400 mt-2 truncate">
-            {site.targetRegion}
+          <div className="text-[11px] text-[var(--ink-faint)] mt-3 truncate font-mono">
+            {site.surfaceSlopeClass}
           </div>
         </div>
 
-        {/* Card 4: Mission Designation & Target */}
-        <div className="bg-[#070d1e]/80 border border-[#1e293b] rounded-2xl p-4 shadow-xl flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-cyan-400" />
+        {/* Target Region */}
+        <div className="bento-plate p-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-[var(--ink-soft)] flex items-center gap-1.5">
+              <Award className="w-4 h-4 text-[var(--coral)]" />
               Mission Target
             </span>
-            <span className="text-[10px] font-mono text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded-full">
-              CLPS / Artemis
-            </span>
+            <span className="text-[10px] font-mono text-[var(--coral)]">CLPS Program</span>
           </div>
-          <div>
-            <div className="text-xl font-bold text-white tracking-tight truncate">
-              {site.mission?.split('(')[0]?.trim() || site.mission}
+          <div className="mt-3">
+            <div className="text-sm font-bold text-[var(--ink)] truncate">
+              {site.mission?.split('(')[0]?.trim()}
             </div>
-            <div className="text-xs text-slate-400 mt-1">
-              Coordinates: {site.lat.toFixed(1)}°N, {site.lon.toFixed(1)}°E
+            <div className="text-[11px] font-mono text-[var(--ink-mute)] mt-1">
+              Contractor: <strong className="text-[var(--ink)]">{site.contractor}</strong>
             </div>
           </div>
-          <div className="text-[11px] text-slate-400 mt-2 line-clamp-1">
-            {site.namedAfter}
+          <div className="text-[11px] text-[var(--ink-faint)] mt-3 truncate font-mono">
+            {site.targetRegion}
           </div>
         </div>
       </div>
 
-      {/* BENTO GRID ROW 2: Primary Interactive Ephemeris Chart */}
-      <div className="bg-[#070d1e]/90 border border-[#1e293b] rounded-2xl p-5 shadow-2xl space-y-4">
-        {/* Chart Header & Controls */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      {/* ── Row 2: Recharts Ephemeris Trajectory Plot ───── */}
+      <div className="bento-plate p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[var(--line-soft)] pb-4">
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Sun className="w-4 h-4 text-amber-400" />
-              Sun & Earth Elevation Over Time
+            <h2 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
+              <Sun className="w-4 h-4 text-[var(--coral)]" />
+              Sun & Earth Elevation vs Horizon Over Time
             </h2>
-            <p className="text-xs text-slate-400">
-              0° line denotes local lunar horizon. Sun above horizon powers solar arrays; Earth above horizon enables DTE telemetry.
+            <p className="text-xs text-[var(--ink-mute)] font-sans">
+              Red dashed line denotes 0° local lunar horizon. Values above 0° enable solar conversion and direct Earth sightline.
             </p>
           </div>
 
-          {/* Time Window Switcher (24h / 48h / 7d / 14d / 29.5d) */}
-          <div className="flex flex-wrap items-center bg-[#0d1527] p-1 rounded-xl border border-slate-700">
+          <div className="flex items-center bg-[var(--paper-dark)] p-0.5 rounded-lg border border-[var(--line-soft)]">
             {[
-              { id: '24h', label: '24 Hours', hours: 24 },
-              { id: '48h', label: '48 Hours', hours: 48 },
-              { id: '7d', label: '7 Days', hours: 168 },
-              { id: '14d', label: '14 Days', hours: 336 },
-              { id: 'month', label: '29.5d (Lunar Day)', hours: 708 },
+              { id: '24h', label: '24h', hours: 24 },
+              { id: '48h', label: '48h', hours: 48 },
+              { id: '7d', label: '7d', hours: 168 },
+              { id: '14d', label: '14d', hours: 336 },
+              { id: 'month', label: '29.5d', hours: 708 },
             ].map((tw) => (
               <button
                 key={tw.id}
@@ -284,11 +258,10 @@ export default function SiteDetailView({
                   setTimeRange(tw.hours);
                   if (setTimeWindow) setTimeWindow(tw.id);
                 }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                  timeRange === tw.hours
-                    ? 'bg-amber-400 text-black font-semibold'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                className={`px-2.5 py-1 rounded text-xs font-mono transition-colors ${timeRange === tw.hours
+                    ? 'bg-[var(--coral)] text-[#120e07] font-semibold'
+                    : 'text-[var(--ink-mute)] hover:text-white'
+                  }`}
               >
                 {tw.label}
               </button>
@@ -296,8 +269,8 @@ export default function SiteDetailView({
           </div>
         </div>
 
-        {/* Main Recharts Line Plot */}
-        <div className="h-[340px] w-full pt-2">
+        {/* Interactive Line Chart */}
+        <div className="h-[320px] w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={chartData}
@@ -307,22 +280,21 @@ export default function SiteDetailView({
                 }
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(238, 241, 247, 0.08)" />
               <XAxis
                 dataKey="label"
-                stroke="#64748b"
-                fontSize={11}
+                stroke="#667085"
+                fontSize={10}
                 tickLine={false}
-                minTickGap={25}
+                minTickGap={30}
               />
               <YAxis
-                stroke="#64748b"
-                fontSize={11}
+                stroke="#667085"
+                fontSize={10}
                 tickLine={false}
                 domain={[-15, 45]}
                 tickFormatter={(v) => `${v}°`}
               />
-              {/* 0° Local Horizon Threshold Line */}
               <ReferenceLine
                 y={0}
                 stroke="#ef4444"
@@ -332,30 +304,30 @@ export default function SiteDetailView({
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#070d1e',
-                  borderColor: '#334155',
-                  borderRadius: '0.75rem',
-                  fontSize: '0.75rem',
-                  color: '#f8fafc',
+                  backgroundColor: '#0a0e17',
+                  borderColor: 'rgba(238, 241, 247, 0.16)',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  color: '#eef1f7',
                 }}
                 formatter={(val, name) => [
                   `${val}°`,
-                  name === 'sunAlt' ? 'Sun Altitude' : 'Earth Altitude',
+                  name === 'sunAlt' ? 'Sun Elevation' : 'Earth Elevation',
                 ]}
               />
               <Line
                 type="monotone"
                 dataKey="sunAlt"
-                stroke="#f59e0b"
-                strokeWidth={2.5}
+                stroke="#ffab5e"
+                strokeWidth={2.4}
                 dot={false}
                 name="sunAlt"
               />
               <Line
                 type="monotone"
                 dataKey="earthAlt"
-                stroke="#38bdf8"
-                strokeWidth={2.5}
+                stroke="#8fd3e8"
+                strokeWidth={2.4}
                 dot={false}
                 name="earthAlt"
               />
@@ -363,84 +335,83 @@ export default function SiteDetailView({
           </ResponsiveContainer>
         </div>
 
-        {/* Live Hover Scrubber Telemetry Strip */}
-        <div className="bg-[#0b1329] border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+        {/* Live Hover Scrubber Strip */}
+        <div className="bg-[var(--paper-dark)] border border-[var(--line-soft)] rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-slate-400" />
-            <span className="text-slate-300 font-bold">{activePoint.label || '00:00'}</span>
+            <Clock className="w-3.5 h-3.5 text-[var(--ink-mute)]" />
+            <span className="text-[var(--ink)] font-bold">{activePoint.label || '00:00 UTC'}</span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-5">
             <div>
-              <span className="text-slate-400 text-[10px] block">Sun Position:</span>
-              <span className={`font-bold ${activePoint.sunAlt > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
-                {activePoint.sunAlt}° alt, {activePoint.sunAz}° az
+              <span className="text-[var(--ink-faint)] text-[10px] block">Sun Vector:</span>
+              <span className="text-[var(--coral)] font-bold">
+                {activePoint.sunAlt}° alt · {activePoint.sunAz}° az
               </span>
             </div>
 
             <div>
-              <span className="text-slate-400 text-[10px] block">Earth Position:</span>
-              <span className={`font-bold ${activePoint.earthAlt > 0 ? 'text-sky-400' : 'text-rose-400'}`}>
-                {activePoint.earthAlt}° alt, {activePoint.earthAz}° az
+              <span className="text-[var(--ink-faint)] text-[10px] block">Earth Vector:</span>
+              <span className="text-[var(--mustard)] font-bold">
+                {activePoint.earthAlt}° alt · {activePoint.earthAz}° az
               </span>
             </div>
 
             <div>
-              <span className="text-slate-400 text-[10px] block">Solar Efficiency:</span>
-              <span className="text-amber-300 font-bold">{activePoint.powerEfficiency}%</span>
+              <span className="text-[var(--ink-faint)] text-[10px] block">Solar Incidence:</span>
+              <span className="text-[var(--ink)] font-bold">{activePoint.powerEfficiency}%</span>
             </div>
 
             <div>
-              <span className="text-slate-400 text-[10px] block">DTE Comm Link:</span>
-              <span className={`font-bold ${activePoint.commActive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {activePoint.commActive ? 'ACTIVE' : 'BLOCKED'}
+              <span className="text-[var(--ink-faint)] text-[10px] block">Direct Comm Link:</span>
+              <span className={`font-bold ${activePoint.commActive ? 'text-[var(--emerald)]' : 'text-[var(--crimson)]'}`}>
+                {activePoint.commActive ? 'ACTIVE' : 'OCCLUDED'}
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* BENTO GRID ROW 3: Science Lore, Facts, & Objectives */}
+      {/* ── Row 3: Science Lore & Mission Goals ────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Lore & Scientific Justification */}
-        <div className="bg-[#070d1e]/90 border border-[#1e293b] rounded-2xl p-5 shadow-xl space-y-3">
-          <h3 className="font-bold text-white text-sm flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
+        {/* Why NASA Chose Site */}
+        <div className="bento-plate p-5 space-y-3">
+          <h3 className="font-bold text-[var(--ink)] text-sm flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[var(--coral)]" />
             Why NASA Chose This Candidate Site
           </h3>
-          <p className="text-xs text-slate-300 leading-relaxed">
+          <p className="text-xs text-[var(--ink-soft)] leading-relaxed">
             {site.whyNASAChose}
           </p>
 
-          <div className="bg-[#0b1329] border border-slate-800 rounded-xl p-3.5 space-y-1.5 mt-2">
-            <span className="text-amber-400 font-semibold text-xs flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5" />
-              Fun Fact & Historical Lore
+          <div className="bg-[var(--paper-dark)] border border-[var(--line-soft)] rounded-xl p-3.5 space-y-1 mt-2">
+            <span className="text-[var(--coral)] font-semibold text-xs flex items-center gap-1.5">
+              <Award className="w-3.5 h-3.5" /> Historical Lore
             </span>
-            <p className="text-xs text-slate-300 italic">
+            <p className="text-xs text-[var(--ink-mute)] italic leading-relaxed">
               "{site.funFact}"
             </p>
           </div>
         </div>
 
-        {/* Science Payload & Engineering Goals */}
-        <div className="bg-[#070d1e]/90 border border-[#1e293b] rounded-2xl p-5 shadow-xl space-y-3">
-          <h3 className="font-bold text-white text-sm flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-sky-400" />
+        {/* Science Payload & Objectives */}
+        <div className="bento-plate p-5 space-y-3">
+          <h3 className="font-bold text-[var(--ink)] text-sm flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-[var(--mustard)]" />
             Primary Mission Objectives & Science Payloads
           </h3>
-          <ul className="space-y-2 text-xs text-slate-300">
+          <ul className="space-y-2 text-xs text-[var(--ink-soft)]">
             {site.keyScienceGoals?.map((goal, i) => (
               <li key={i} className="flex items-start gap-2">
-                <ChevronRight className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <ChevronRight className="w-3.5 h-3.5 text-[var(--coral)] flex-shrink-0 mt-0.5" />
                 <span>{goal}</span>
               </li>
             ))}
           </ul>
 
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono">
-            <span className="text-slate-400">Target Contractor:</span>
-            <span className="text-white font-semibold">{site.contractor}</span>
+          <div className="pt-3 border-t border-[var(--line-soft)] flex items-center justify-between text-xs font-mono">
+            <span className="text-[var(--ink-faint)]">Target Contractor:</span>
+            <span className="text-[var(--ink)] font-semibold">{site.contractor}</span>
           </div>
         </div>
       </div>
