@@ -1,22 +1,37 @@
 // src/components/MoonGlobe.jsx
 // Authentic 3D Celestial System using NASA 3D GLB Models (Sun SDO, EarthClouds, Moon LRO).
-// Dual camera modes (Geolocked vs Orbit), All-Site DTE Vector Field, Solar Divergence,
-// Classy obsidian rings & laser crimson markers, multi-spectral celestial starfield. Zero 2D blobs.
+// Physically calibrated to NASA measured volume and diameter ratios:
+// Moon Radius: 1,737.4 km (1.0x baseline, 2.0x diam)
+// Earth Radius: 6,371.0 km (3.667x Moon radius, 49.3x Moon volume)
+// Sun Radius: 696,340 km (400.8x Moon radius, 64,300,000x Moon volume)
+// Earth-Moon Distance: 384,400 km (221.25x Moon radius, 30.17x Earth diameters)
+// Sun-Moon Distance: 149.6M km (86,105x Moon radius, 1.000 AU)
+// Includes Dual Scale Mode (1:1 True NASA Scale vs Proportional Orbit Scale),
+// Camera Focus Targets (Moon / Earth / Sun / Full System), All-Site DTE Vectors, and Solar Rays.
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as Astronomy from 'astronomy-engine';
 import sites from '../data/sites.json';
-import { Eye, Compass, Layers, Radio, Sun, Sparkles, Navigation } from 'lucide-react';
+import { Eye, Compass, Layers, Radio, Sun, Sparkles, Navigation, Maximize2, Info, ChevronDown } from 'lucide-react';
 
-// Distance & Scale Constants (Scales calibrated for visual clarity while preserving exact angles)
-const MOON_RADIUS = 1.0;
-const EARTH_RADIUS = 0.55; // Scaled for visible disk
-const SUN_RADIUS = 1.35;   // Scaled for visible disk
-const EARTH_DIST = 9.0;    // Scaled distance to Earth (astronomical direction exact)
-const SUN_DIST = 28.0;     // Scaled distance to Sun (astronomical direction exact)
+// NASA Physical Dimensions
+const NASA = {
+  MOON_R_KM: 1737.4,
+  EARTH_R_KM: 6371.0,
+  SUN_R_KM: 696340.0,
+  EARTH_DIST_KM: 384400.0,
+  SUN_DIST_KM: 149597870.0,
+  // Ratios w.r.t Moon radius (baseline = 1.0)
+  EARTH_R_RATIO: 3.667,   // 6371 / 1737.4
+  SUN_R_RATIO: 400.8,     // 696340 / 1737.4
+  EARTH_DIST_RATIO: 221.25, // 384400 / 1737.4
+  SUN_DIST_RATIO: 86105.0,  // 149.6M / 1737.4
+  EARTH_VOL_RATIO: 49.3,    // (3.667)^3
+  SUN_VOL_RATIO: 64300000.0, // (400.8)^3
+};
 
 export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
   const containerRef = useRef(null);
@@ -42,10 +57,39 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
 
   // UI States
   const [currentHour, setCurrentHour] = useState(12);
+  const [scaleMode, setScaleMode] = useState('true'); // 'true' (1:1 NASA) | 'proportional' (Compact Orbit)
   const [cameraMode, setCameraMode] = useState('geolocked'); // 'geolocked' | 'orbit'
   const [vectorMode, setVectorMode] = useState('all'); // 'all' | 'dte' | 'solar' | 'off'
   const [selectedSiteId, setSelectedSiteId] = useState(selectedSite?.id || sites[0].id);
-  const [telemetry, setTelemetry] = useState({ sunDistKm: 149600000, earthDistKm: 384400, earthPhase: 100 });
+  const [showScaleDetails, setShowScaleDetails] = useState(false);
+  const [focusTarget, setFocusTarget] = useState('moon'); // 'moon' | 'earth' | 'sun' | 'system'
+  const [telemetry, setTelemetry] = useState({ sunDistKm: 149597870, earthDistKm: 384400, earthPhase: 100 });
+
+  // Compute active 3D units based on selected scaleMode
+  const scaleConfig = useMemo(() => {
+    if (scaleMode === 'true') {
+      return {
+        moonRadius: 1.0,
+        earthRadius: NASA.EARTH_R_RATIO, // 3.667 units (nearly 4x Moon diameter!)
+        sunRadius: NASA.SUN_R_RATIO,     // 400.8 units (enormous star!)
+        earthDist: NASA.EARTH_DIST_RATIO, // 221.25 units
+        sunDist: NASA.SUN_DIST_RATIO,     // 86,105.0 units
+        maxCameraDist: 250000,
+        label: '1:1 True NASA Scale',
+      };
+    } else {
+      // Proportional Compact Orbit view (exact Earth/Moon ratio preserved, distances calibrated for compact frame)
+      return {
+        moonRadius: 1.0,
+        earthRadius: NASA.EARTH_R_RATIO, // 3.667 units (true diameter preserved!)
+        sunRadius: 28.0,                 // 28x larger than Moon
+        earthDist: 34.0,                 // 34 units
+        sunDist: 160.0,                  // 160 units
+        maxCameraDist: 1200,
+        label: 'Proportional Orbit Scale',
+      };
+    }
+  }, [scaleMode]);
 
   // Sync prop changes
   useEffect(() => {
@@ -64,14 +108,10 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     const ny = Math.sin(latRad);
     const nz = Math.cos(latRad) * Math.cos(lonRad);
 
-    const dist = 2.6;
-    const targetCamX = nx * dist;
-    const targetCamY = ny * dist;
-    const targetCamZ = nz * dist;
-
-    // Smooth lerp in animation loop via controls target
+    const dist = 2.8;
     controlsRef.current.target.set(0, 0, 0);
-    cameraRef.current.position.set(targetCamX, targetCamY, targetCamZ);
+    cameraRef.current.position.set(nx * dist, ny * dist, nz * dist);
+    setFocusTarget('moon');
   }, [cameraMode]);
 
   // ── Initialize Scene ──────────────────────────────────────
@@ -81,22 +121,27 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
 
     // SCENE
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x060910);
+    scene.background = new THREE.Color(0x04060c);
     sceneRef.current = scene;
 
-    // CAMERA
-    const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.set(0, 0.5, 3.2);
+    // CAMERA (with Logarithmic Depth Buffer support for astronomical distances up to 1,000,000 units)
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000000);
+    camera.position.set(0, 0.8, 3.4);
     cameraRef.current = camera;
 
-    // RENDERER
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    // RENDERER with Logarithmic Depth Buffer to prevent z-fighting across 86,000 units
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      logarithmicDepthBuffer: true,
+      powerPreference: 'high-performance',
+    });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.25;
+    renderer.toneMappingExposure = 1.3;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -104,48 +149,47 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 1.25;
-    controls.maxDistance = 55;
+    controls.minDistance = 1.15;
+    controls.maxDistance = 250000;
     controls.target.set(0, 0, 0);
     controlsRef.current = controls;
 
-    // AMBIENT LIGHT (Cosmic deep-space background radiation)
-    const ambientLight = new THREE.AmbientLight(0x1a2236, 0.45);
+    // AMBIENT LIGHT
+    const ambientLight = new THREE.AmbientLight(0x182438, 0.45);
     scene.add(ambientLight);
 
     // DIRECTIONAL SUNLIGHT → MOON
-    const moonSunLight = new THREE.DirectionalLight(0xfffbf0, 3.4);
+    const moonSunLight = new THREE.DirectionalLight(0xfffbf2, 3.6);
     moonSunLight.castShadow = true;
     moonSunLight.shadow.mapSize.width = 2048;
     moonSunLight.shadow.mapSize.height = 2048;
-    moonSunLight.shadow.camera.near = 1;
-    moonSunLight.shadow.camera.far = 60;
-    moonSunLight.shadow.bias = -0.0005;
+    moonSunLight.shadow.camera.near = 0.5;
+    moonSunLight.shadow.camera.far = 100;
+    moonSunLight.shadow.bias = -0.0004;
     scene.add(moonSunLight);
     moonSunLightRef.current = moonSunLight;
 
-    // DIRECTIONAL SUNLIGHT → EARTH (Guarantees scientifically accurate day/night terminator on Earth)
-    const earthSunLight = new THREE.DirectionalLight(0xfffbf0, 3.6);
+    // DIRECTIONAL SUNLIGHT → EARTH (Simulates realistic day/night terminator on Earth)
+    const earthSunLight = new THREE.DirectionalLight(0xfffbf2, 3.8);
     scene.add(earthSunLight);
     earthSunLightRef.current = earthSunLight;
 
-    // CELESTIAL MULTI-SPECTRAL STARFIELD (8,000 real astronomical temperature stars)
+    // MULTI-SPECTRAL CELESTIAL STARFIELD (8,000 astronomical temperature stars)
     const starCount = 8000;
     const starGeom = new THREE.BufferGeometry();
     const starPositions = new Float32Array(starCount * 3);
     const starColors = new Float32Array(starCount * 3);
 
-    // Spectral classes: O/B (blue-white), A/F (white), G (yellow/sun-like), K/M (amber/red)
     const spectralPalettes = [
-      [0.72, 0.82, 1.0], // Blue-white O/B
+      [0.75, 0.85, 1.0], // Blue-white O/B
       [0.92, 0.95, 1.0], // Pure white A
       [1.0, 0.96, 0.88], // Warm white F/G
-      [1.0, 0.82, 0.65], // Amber K
-      [1.0, 0.65, 0.55], // Soft orange M
+      [1.0, 0.84, 0.68], // Amber K
+      [1.0, 0.68, 0.58], // Orange M
     ];
 
     for (let i = 0; i < starCount; i++) {
-      const radius = 180 + Math.random() * 80;
+      const radius = 280000 + Math.random() * 80000;
       const u = Math.random();
       const v = Math.random();
       const theta = 2 * Math.PI * u;
@@ -164,10 +208,10 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     starGeom.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
     starGeom.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
     const starMat = new THREE.PointsMaterial({
-      size: 0.9,
+      size: 1.4,
       vertexColors: true,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.92,
       depthWrite: false,
     });
     scene.add(new THREE.Points(starGeom, starMat));
@@ -197,7 +241,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         if (maxDim > 0) {
-          const s = (MOON_RADIUS * 2) / maxDim;
+          const s = 2.0 / maxDim; // Moon radius = 1.0 (Diameter = 2.0)
           moon.scale.set(s, s, s);
         }
         moon.traverse((child) => {
@@ -214,9 +258,8 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         moonModelRef.current = moon;
       },
       undefined,
-      (err) => {
-        console.warn('Fallback sphere for Moon:', err);
-        const geom = new THREE.SphereGeometry(MOON_RADIUS, 64, 64);
+      () => {
+        const geom = new THREE.SphereGeometry(1.0, 64, 64);
         const mat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.9 });
         const mesh = new THREE.Mesh(geom, mat);
         scene.add(mesh);
@@ -225,6 +268,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     );
 
     // 2. Earth Model (NASA EarthClouds_1_12756.glb)
+    // NASA measured radius: 6,371 km = 3.667x Moon radius
     gltfLoader.load(
       '/models/earth.glb',
       (gltf) => {
@@ -232,8 +276,9 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         const box = new THREE.Box3().setFromObject(earth);
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
+        earth.userData.naturalDim = maxDim;
         if (maxDim > 0) {
-          const s = (EARTH_RADIUS * 2) / maxDim;
+          const s = (NASA.EARTH_R_RATIO * 2) / maxDim; // Earth diameter = 7.334 units
           earth.scale.set(s, s, s);
         }
         earth.traverse((child) => {
@@ -246,9 +291,8 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         earthModelRef.current = earth;
       },
       undefined,
-      (err) => {
-        console.warn('Fallback Earth sphere:', err);
-        const geom = new THREE.SphereGeometry(EARTH_RADIUS, 32, 32);
+      () => {
+        const geom = new THREE.SphereGeometry(NASA.EARTH_R_RATIO, 32, 32);
         const mat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.5 });
         const mesh = new THREE.Mesh(geom, mat);
         scene.add(mesh);
@@ -257,6 +301,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     );
 
     // 3. Sun Model (NASA Sun_1_1391000.glb)
+    // NASA measured radius: 696,340 km = 400.8x Moon radius
     gltfLoader.load(
       '/models/sun.glb',
       (gltf) => {
@@ -264,24 +309,23 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         const box = new THREE.Box3().setFromObject(sun);
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
+        sun.userData.naturalDim = maxDim;
         if (maxDim > 0) {
-          const s = (SUN_RADIUS * 2) / maxDim;
+          const s = (NASA.SUN_R_RATIO * 2) / maxDim; // Sun diameter = 801.6 units in True scale
           sun.scale.set(s, s, s);
         }
-        // Self-illuminating coronal emission
         sun.traverse((child) => {
           if (child.isMesh && child.material) {
             child.material.emissive = new THREE.Color(0xffaa22);
-            child.material.emissiveIntensity = 1.4;
+            child.material.emissiveIntensity = 1.6;
           }
         });
         scene.add(sun);
         sunModelRef.current = sun;
       },
       undefined,
-      (err) => {
-        console.warn('Fallback Sun sphere:', err);
-        const geom = new THREE.SphereGeometry(SUN_RADIUS, 32, 32);
+      () => {
+        const geom = new THREE.SphereGeometry(NASA.SUN_R_RATIO, 32, 32);
         const mat = new THREE.MeshBasicMaterial({ color: 0xffcc33 });
         const mesh = new THREE.Mesh(geom, mat);
         scene.add(mesh);
@@ -289,7 +333,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
       }
     );
 
-    // BUILD CLASSY CANDIDATE SITE MARKERS (Obsidian Ring + Laser Crimson Pin)
+    // BUILD CANDIDATE SITE MARKERS (Obsidian Ring + Laser Crimson Pin)
     buildSiteMarkers(markersGroup, selectedSiteId);
 
     // ── POINTER HANDLERS (Drag vs Click Detection) ──────────
@@ -300,7 +344,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     const handlePointerUp = (e) => {
       const dx = Math.abs(e.clientX - pointerDownPos.current.x);
       const dy = Math.abs(e.clientY - pointerDownPos.current.y);
-      if (dx > 6 || dy > 6) return; // User was dragging/orbiting the camera
+      if (dx > 6 || dy > 6) return; // User was dragging camera
 
       const rect = container.getBoundingClientRect();
       mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -334,12 +378,11 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
       animId = requestAnimationFrame(animate);
       const dt = clock.getDelta();
 
-      // Gentle rotation for Earth clouds & Sun corona
       if (earthModelRef.current) {
         earthModelRef.current.rotation.y += dt * 0.08;
       }
       if (sunModelRef.current) {
-        sunModelRef.current.rotation.y += dt * 0.02;
+        sunModelRef.current.rotation.y += dt * 0.015;
       }
 
       controls.update();
@@ -367,18 +410,17 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     };
   }, []);
 
-  // ── UPDATE ASTRONOMICAL EPHEMERIS POSITIONS ───────────────
-  const updateEphemeris = useCallback(() => {
+  // ── UPDATE ASTRONOMICAL POSITIONS & ACTIVE SCALE ──────────
+  const updateEphemerisAndScale = useCallback(() => {
     if (!sceneRef.current) return;
 
     const hourStr = String(currentHour).padStart(2, '0');
     const time = new Date(`${date}T${hourStr}:00:00Z`);
 
-    // True Geocentric Vectors via Astronomy-Engine
+    // Astronomical Vectors via Astronomy-Engine
     const moonVec = Astronomy.GeoVector(Astronomy.Body.Moon, time, true);
     const sunVec = Astronomy.GeoVector(Astronomy.Body.Sun, time, true);
 
-    // Sun Vector relative to Moon Center (dSun = S - M)
     const dSun = {
       x: sunVec.x - moonVec.x,
       y: sunVec.y - moonVec.y,
@@ -387,12 +429,11 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     const sunMag = Math.hypot(dSun.x, dSun.y, dSun.z);
     const sunDir = new THREE.Vector3(dSun.x / sunMag, dSun.y / sunMag, dSun.z / sunMag);
 
-    // Earth Vector relative to Moon Center (dEarth = -M)
     const dEarth = { x: -moonVec.x, y: -moonVec.y, z: -moonVec.z };
     const earthMag = Math.hypot(dEarth.x, dEarth.y, dEarth.z);
     const earthDir = new THREE.Vector3(dEarth.x / earthMag, dEarth.y / earthMag, dEarth.z / earthMag);
 
-    // Telemetry stats
+    // Calculate lunar perspective phase of Earth
     const sunMoonAngle = sunDir.angleTo(earthDir);
     const phaseFraction = (1 + Math.cos(sunMoonAngle)) / 2;
     setTelemetry({
@@ -401,31 +442,45 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
       earthPhase: Math.round(phaseFraction * 100),
     });
 
-    // 1. POSITION SUN MODEL
-    const sunPos = sunDir.clone().multiplyScalar(SUN_DIST);
-    if (sunModelRef.current) {
-      sunModelRef.current.position.copy(sunPos);
-    }
-
-    // 2. POSITION EARTH MODEL
-    const earthPos = earthDir.clone().multiplyScalar(EARTH_DIST);
+    // 1. UPDATE EARTH MODEL SCALE & POSITION
+    const earthPos = earthDir.clone().multiplyScalar(scaleConfig.earthDist);
     if (earthModelRef.current) {
       earthModelRef.current.position.copy(earthPos);
+      const naturalDim = earthModelRef.current.userData?.naturalDim || 2.0;
+      const targetDiam = scaleConfig.earthRadius * 2;
+      const s = targetDiam / naturalDim;
+      earthModelRef.current.scale.set(s, s, s);
+    }
+
+    // 2. UPDATE SUN MODEL SCALE & POSITION
+    const sunPos = sunDir.clone().multiplyScalar(scaleConfig.sunDist);
+    if (sunModelRef.current) {
+      sunModelRef.current.position.copy(sunPos);
+      const naturalDim = sunModelRef.current.userData?.naturalDim || 2.0;
+      const targetDiam = scaleConfig.sunRadius * 2;
+      const s = targetDiam / naturalDim;
+      sunModelRef.current.scale.set(s, s, s);
     }
 
     // 3. SUN LIGHT → MOON
     if (moonSunLightRef.current) {
-      moonSunLightRef.current.position.copy(sunPos);
+      // Place light along sun direction at a clean shadow-map distance
+      moonSunLightRef.current.position.copy(sunDir.clone().multiplyScalar(25));
       moonSunLightRef.current.target.position.set(0, 0, 0);
       moonSunLightRef.current.target.updateMatrixWorld();
     }
 
-    // 4. SUN LIGHT → EARTH (From Sun direction pointing toward Earth)
+    // 4. SUN LIGHT → EARTH
     if (earthSunLightRef.current) {
       const sunToEarthDir = new THREE.Vector3().subVectors(earthPos, sunPos).normalize();
-      earthSunLightRef.current.position.copy(earthPos).sub(sunToEarthDir.clone().multiplyScalar(10));
+      earthSunLightRef.current.position.copy(earthPos).sub(sunToEarthDir.clone().multiplyScalar(15));
       earthSunLightRef.current.target.position.copy(earthPos);
       earthSunLightRef.current.target.updateMatrixWorld();
+    }
+
+    // 5. UPDATE CONTROLS LIMITS
+    if (controlsRef.current) {
+      controlsRef.current.maxDistance = scaleConfig.maxCameraDist;
     }
 
     // ── REBUILD ALL-SITE DTE VECTORS ────────────────────────
@@ -437,19 +492,17 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         sites.forEach((site) => {
           const latRad = (site.lat * Math.PI) / 180;
           const lonRad = (site.lon * Math.PI) / 180;
-          const sx = Math.cos(latRad) * Math.sin(lonRad) * MOON_RADIUS;
-          const sy = Math.sin(latRad) * MOON_RADIUS;
-          const sz = Math.cos(latRad) * Math.cos(lonRad) * MOON_RADIUS;
+          const sx = Math.cos(latRad) * Math.sin(lonRad);
+          const sy = Math.sin(latRad);
+          const sz = Math.cos(latRad) * Math.cos(lonRad);
           const siteVec = new THREE.Vector3(sx, sy, sz);
 
-          // Dot product: line of sight check (Up vector dot Earth vector)
           const upVec = siteVec.clone().normalize();
           const dot = upVec.dot(earthDir);
           const isVisible = dot > 0.0;
 
-          // Color: Cyan for line-of-sight > 0°, Crimson for terrain/lunar occultation
           const color = isVisible ? 0x8fd3e8 : 0xef4444;
-          const opacity = isVisible ? (site.id === selectedSiteId ? 0.95 : 0.45) : 0.2;
+          const opacity = isVisible ? (site.id === selectedSiteId ? 0.95 : 0.45) : 0.18;
 
           const points = [siteVec, earthPos];
           const geom = new THREE.BufferGeometry().setFromPoints(points);
@@ -457,10 +510,8 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
             color,
             transparent: true,
             opacity,
-            linewidth: site.id === selectedSiteId ? 2 : 1,
           });
-          const line = new THREE.Line(geom, mat);
-          dteVectorsGroupRef.current.add(line);
+          dteVectorsGroupRef.current.add(new THREE.Line(geom, mat));
         });
       }
     }
@@ -471,12 +522,12 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
 
       const showSolar = vectorMode === 'all' || vectorMode === 'solar';
       if (showSolar) {
-        const rayCount = 12;
+        const rayCount = 16;
         for (let i = 0; i < rayCount; i++) {
           const angle = (i / rayCount) * Math.PI * 2;
           const coneOffset = new THREE.Vector3(
-            Math.cos(angle) * 1.8,
-            Math.sin(angle) * 1.8,
+            Math.cos(angle) * (scaleConfig.sunRadius * 0.4),
+            Math.sin(angle) * (scaleConfig.sunRadius * 0.4),
             0
           );
           const target = coneOffset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(sunDir.x, sunDir.z));
@@ -484,17 +535,17 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
           const rayMat = new THREE.LineBasicMaterial({
             color: 0xffab5e,
             transparent: true,
-            opacity: 0.25,
+            opacity: 0.22,
           });
           solarRaysGroupRef.current.add(new THREE.Line(rayGeom, rayMat));
         }
       }
     }
-  }, [date, currentHour, vectorMode, selectedSiteId]);
+  }, [date, currentHour, vectorMode, selectedSiteId, scaleConfig]);
 
   useEffect(() => {
-    updateEphemeris();
-  }, [updateEphemeris]);
+    updateEphemerisAndScale();
+  }, [updateEphemerisAndScale]);
 
   // Update marker highlight on selection
   useEffect(() => {
@@ -503,97 +554,192 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     }
   }, [selectedSiteId]);
 
-  // Camera Mode Toggle
-  const handleToggleCamera = () => {
+  // Camera Target Anchors
+  const handleFocus = (target) => {
     if (!cameraRef.current || !controlsRef.current) return;
-    const newMode = cameraMode === 'geolocked' ? 'orbit' : 'geolocked';
-    setCameraMode(newMode);
+    setFocusTarget(target);
 
-    if (newMode === 'orbit') {
-      // Zoom out to view entire orbital system
+    if (target === 'moon') {
       controlsRef.current.target.set(0, 0, 0);
-      cameraRef.current.position.set(0, 22, 38);
-    } else {
-      // Geolock to selected site
-      const found = sites.find((s) => s.id === selectedSiteId) || sites[0];
-      flyToSite(found);
+      cameraRef.current.position.set(0, 0.8, 3.2);
+    } else if (target === 'earth') {
+      if (earthModelRef.current) {
+        const ep = earthModelRef.current.position;
+        controlsRef.current.target.copy(ep);
+        cameraRef.current.position.set(ep.x + 8, ep.y + 4, ep.z + 8);
+      }
+    } else if (target === 'sun') {
+      if (sunModelRef.current) {
+        const sp = sunModelRef.current.position;
+        controlsRef.current.target.copy(sp);
+        const offset = scaleConfig.sunRadius * 2.5;
+        cameraRef.current.position.set(sp.x, sp.y + offset * 0.3, sp.z + offset);
+      }
+    } else if (target === 'system') {
+      controlsRef.current.target.set(0, 0, 0);
+      if (scaleMode === 'true') {
+        cameraRef.current.position.set(0, 25000, 75000);
+      } else {
+        cameraRef.current.position.set(0, 70, 180);
+      }
     }
   };
 
   return (
-    <div className="relative w-full h-full min-h-[500px] flex flex-col select-none">
-      {/* 3D Canvas Container */}
+    <div className="relative w-full h-full min-h-[520px] flex flex-col select-none">
+      {/* 3D WebGL Canvas */}
       <div ref={containerRef} className="w-full flex-1 rounded-xl overflow-hidden cursor-grab active:cursor-grabbing" />
 
-      {/* Top Floating Control Bar */}
-      <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
-        {/* Camera Mode Toggle */}
-        <div className="flex items-center gap-2 pointer-events-auto">
+      {/* ── Top Left: Scale Mode & Target Focus Anchors ──────── */}
+      <div className="absolute top-3 left-3 z-10 flex flex-col gap-2 pointer-events-auto">
+        {/* Scale Mode Selector Button */}
+        <div className="flex items-center gap-1.5 bg-[#0a0e17]/90 backdrop-blur-md p-1 rounded-xl border border-[var(--line)]">
           <button
-            onClick={handleToggleCamera}
-            className={`telemetry-chip transition-all ${cameraMode === 'geolocked' ? 'sun' : 'earth'}`}
-            title="Toggle between Geolocked Site View and Heliocentric Orbit System"
+            onClick={() => setScaleMode('true')}
+            className={`px-3 py-1 rounded-lg text-xs font-mono font-medium transition-colors ${
+              scaleMode === 'true'
+                ? 'bg-[var(--coral)] text-[#120e07] font-semibold shadow-sm'
+                : 'text-[var(--ink-mute)] hover:text-white'
+            }`}
+            title="1:1 Metric Scale: Earth radius 3.67x Moon, Sun radius 401x Moon, Earth distance 221x, Sun distance 86,105x"
           >
-            <Eye className="w-3.5 h-3.5" />
-            <span>{cameraMode === 'geolocked' ? 'Geolocked: Moon Site' : 'Heliocentric Orbit View'}</span>
+            1:1 True NASA Scale
+          </button>
+          <button
+            onClick={() => setScaleMode('proportional')}
+            className={`px-3 py-1 rounded-lg text-xs font-mono font-medium transition-colors ${
+              scaleMode === 'proportional'
+                ? 'bg-[var(--mustard)] text-[#060910] font-semibold shadow-sm'
+                : 'text-[var(--ink-mute)] hover:text-white'
+            }`}
+            title="Compact Orbit Scale: True Earth 3.67x diameter preserved, orbital distances calibrated for compact screen"
+          >
+            Compact Orbit View
+          </button>
+          <button
+            onClick={() => setShowScaleDetails(!showScaleDetails)}
+            className="p-1 text-[var(--ink-faint)] hover:text-white rounded"
+            title="Toggle NASA scientific dimensions specification"
+          >
+            <Info className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Vectors Mode Toggle */}
-        <div className="flex items-center gap-1.5 bg-[#0a0e17]/85 backdrop-blur-md p-1 rounded-full border border-[var(--line)] pointer-events-auto">
+        {/* Quick Camera Navigation Anchors */}
+        <div className="flex items-center gap-1 bg-[#0a0e17]/85 backdrop-blur-md p-0.5 rounded-lg border border-[var(--line-soft)] text-[11px] font-mono">
+          <span className="text-[var(--ink-faint)] px-1.5 text-[10px]">Anchor:</span>
           <button
-            onClick={() => setVectorMode('all')}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
-              vectorMode === 'all' ? 'bg-[var(--coral)] text-[#120e07] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
-            }`}
+            onClick={() => handleFocus('moon')}
+            className={`px-2 py-0.5 rounded transition-colors ${focusTarget === 'moon' ? 'bg-white/15 text-white font-bold' : 'text-[var(--ink-mute)] hover:text-white'}`}
           >
-            All Vectors
+            Moon
           </button>
           <button
-            onClick={() => setVectorMode('dte')}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
-              vectorMode === 'dte' ? 'bg-[var(--mustard)] text-[#060910] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
-            }`}
+            onClick={() => handleFocus('earth')}
+            className={`px-2 py-0.5 rounded transition-colors ${focusTarget === 'earth' ? 'bg-[var(--mustard)] text-[#060910] font-bold' : 'text-[var(--ink-mute)] hover:text-white'}`}
           >
-            DTE Sightlines
+            Earth
           </button>
           <button
-            onClick={() => setVectorMode('solar')}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
-              vectorMode === 'solar' ? 'bg-[var(--coral)] text-[#120e07] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
-            }`}
+            onClick={() => handleFocus('sun')}
+            className={`px-2 py-0.5 rounded transition-colors ${focusTarget === 'sun' ? 'bg-[var(--coral)] text-[#120e07] font-bold' : 'text-[var(--ink-mute)] hover:text-white'}`}
           >
-            Solar Rays
+            Sun
           </button>
           <button
-            onClick={() => setVectorMode('off')}
-            className={`px-2 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
-              vectorMode === 'off' ? 'bg-white/20 text-white' : 'text-[var(--ink-mute)] hover:text-white'
-            }`}
+            onClick={() => handleFocus('system')}
+            className={`px-2 py-0.5 rounded transition-colors ${focusTarget === 'system' ? 'bg-white/20 text-white font-bold' : 'text-[var(--ink-mute)] hover:text-white'}`}
           >
-            Off
+            Full System
           </button>
         </div>
+
+        {/* Expandable Scientific Dimensions Card */}
+        {showScaleDetails && (
+          <div className="bento-plate p-3.5 max-w-sm text-xs font-mono space-y-2 animate-fade-in shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[var(--line-soft)] pb-1.5">
+              <span className="text-[var(--coral)] font-bold">NASA Scientific Measurement Datum</span>
+              <button onClick={() => setShowScaleDetails(false)} className="text-[var(--ink-faint)] hover:text-white">✕</button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div>
+                <span className="text-[var(--ink-faint)] block text-[10px]">Earth / Moon Diam:</span>
+                <span className="text-[var(--ink)] font-bold">3.667 : 1</span>
+              </div>
+              <div>
+                <span className="text-[var(--ink-faint)] block text-[10px]">Earth / Moon Vol:</span>
+                <span className="text-[var(--mustard)] font-bold">49.30 : 1</span>
+              </div>
+              <div>
+                <span className="text-[var(--ink-faint)] block text-[10px]">Sun / Moon Diam:</span>
+                <span className="text-[var(--ink)] font-bold">400.8 : 1</span>
+              </div>
+              <div>
+                <span className="text-[var(--ink-faint)] block text-[10px]">Sun / Moon Vol:</span>
+                <span className="text-[var(--coral)] font-bold">64.3M : 1</span>
+              </div>
+            </div>
+            <div className="pt-1.5 border-t border-[var(--line-soft)] text-[10px] text-[var(--ink-mute)] leading-relaxed">
+              Earth-Moon: 384,400 km (30.2 Earth diams) · Sun-Moon: 149.6M km (1.000 AU). Rendered with logarithmic depth buffers.
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Bottom Floating Telemetry Strip & Time Scrubber */}
-      <div className="absolute bottom-3 left-3 right-3 flex flex-col md:flex-row items-center justify-between gap-3 bg-[#0a0e17]/90 backdrop-blur-md border border-[var(--line)] rounded-xl p-3 pointer-events-auto">
-        {/* Instant Astronomical Telemetry */}
+      {/* ── Top Right: Vector Field Toggles ────────────────── */}
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-[#0a0e17]/85 backdrop-blur-md p-1 rounded-full border border-[var(--line)] pointer-events-auto">
+        <button
+          onClick={() => setVectorMode('all')}
+          className={`px-2.5 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
+            vectorMode === 'all' ? 'bg-[var(--coral)] text-[#120e07] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
+          }`}
+        >
+          All Vectors
+        </button>
+        <button
+          onClick={() => setVectorMode('dte')}
+          className={`px-2.5 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
+            vectorMode === 'dte' ? 'bg-[var(--mustard)] text-[#060910] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
+          }`}
+        >
+          DTE Sightlines
+        </button>
+        <button
+          onClick={() => setVectorMode('solar')}
+          className={`px-2.5 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
+            vectorMode === 'solar' ? 'bg-[var(--coral)] text-[#120e07] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
+          }`}
+        >
+          Solar Rays
+        </button>
+        <button
+          onClick={() => setVectorMode('off')}
+          className={`px-2 py-1 rounded-full text-[11px] font-sans font-medium transition-colors ${
+            vectorMode === 'off' ? 'bg-white/20 text-white' : 'text-[var(--ink-mute)] hover:text-white'
+          }`}
+        >
+          Off
+        </button>
+      </div>
+
+      {/* ── Bottom: Live Astronomical Telemetry & Time Scrubber ── */}
+      <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-col md:flex-row items-center justify-between gap-3 bg-[#0a0e17]/90 backdrop-blur-md border border-[var(--line)] rounded-xl p-3 pointer-events-auto shadow-2xl">
         <div className="flex items-center gap-4 text-xs font-telemetry">
           <div className="flex items-center gap-1.5 text-[var(--coral)]">
             <Sun className="w-3.5 h-3.5" />
             <span>{(telemetry.sunDistKm / 1000000).toFixed(2)}M km</span>
+            <span className="text-[10px] text-[var(--ink-faint)]">({(telemetry.sunDistKm / NASA.MOON_R_KM).toFixed(0)} R_moon)</span>
           </div>
           <div className="flex items-center gap-1.5 text-[var(--mustard)]">
             <Radio className="w-3.5 h-3.5" />
             <span>{telemetry.earthDistKm.toLocaleString()} km</span>
+            <span className="text-[10px] text-[var(--ink-faint)]">({(telemetry.earthDistKm / NASA.MOON_R_KM).toFixed(1)} R_moon)</span>
           </div>
           <div className="hidden sm:inline-flex text-[var(--ink-mute)]">
-            Phase: <span className="text-[var(--ink)] ml-1">{telemetry.earthPhase}%</span>
+            Phase: <span className="text-[var(--ink)] ml-1 font-bold">{telemetry.earthPhase}%</span>
           </div>
         </div>
 
-        {/* Hour Scrubber */}
         <div className="flex items-center gap-3 w-full md:w-auto">
           <span className="text-xs font-telemetry text-[var(--ink-mute)] whitespace-nowrap">
             {String(currentHour).padStart(2, '0')}:00 UTC
@@ -604,7 +750,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
             max="23"
             value={currentHour}
             onChange={(e) => setCurrentHour(Number(e.target.value))}
-            className="w-full md:w-48 accent-[var(--coral)]"
+            className="w-full md:w-48 accent-[var(--coral)] cursor-pointer"
           />
         </div>
       </div>
@@ -613,7 +759,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
 }
 
 // ── BUILD SLEEK CANDIDATE SITE MARKERS ──────────────────────
-// Obsidian black pedestal ring (#030712) + glowing laser crimson beacon (#ef4444)
+// Obsidian black pedestal ring (#030712) + laser crimson beacon (#ef4444)
 function buildSiteMarkers(group, activeSiteId) {
   group.clear();
 
@@ -621,17 +767,15 @@ function buildSiteMarkers(group, activeSiteId) {
     const latRad = (site.lat * Math.PI) / 180;
     const lonRad = (site.lon * Math.PI) / 180;
 
-    const x = Math.cos(latRad) * Math.sin(lonRad) * MOON_RADIUS;
-    const y = Math.sin(latRad) * MOON_RADIUS;
-    const z = Math.cos(latRad) * Math.cos(lonRad) * MOON_RADIUS;
+    const x = Math.cos(latRad) * Math.sin(lonRad);
+    const y = Math.sin(latRad);
+    const z = Math.cos(latRad) * Math.cos(lonRad);
 
     const markerGroup = new THREE.Group();
     markerGroup.position.set(x, y, z);
     markerGroup.userData = { siteId: site.id, siteName: site.name };
 
     const isSelected = site.id === activeSiteId;
-
-    // Surface Normal vector
     const normal = new THREE.Vector3(x, y, z).normalize();
 
     // 1. Sleek Obsidian Black Pedestal Ring

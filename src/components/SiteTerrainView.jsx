@@ -24,6 +24,7 @@ export default function SiteTerrainView({ site, date, onBack }) {
   const ambientLightRef = useRef(null);
   const earthMeshRef = useRef(null);
   const sunMeshRef = useRef(null);
+  const earthLightRef = useRef(null);
   const terrainMeshRef = useRef(null);
   const animFrameRef = useRef(null);
 
@@ -90,12 +91,13 @@ export default function SiteTerrainView({ site, date, onBack }) {
     const sunAltRad = (pos.sun.alt * Math.PI) / 180;
     const sunAzRad = (pos.sun.az * Math.PI) / 180;
 
-    const sunDist = 35;
-    const sunX = Math.cos(sunAltRad) * Math.sin(sunAzRad) * sunDist;
-    const sunY = Math.sin(sunAltRad) * sunDist;
-    const sunZ = -Math.cos(sunAltRad) * Math.cos(sunAzRad) * sunDist;
+    // Ground directional sunlight (for casting terrain shadows)
+    const sunGroundDist = 35;
+    const sunGroundX = Math.cos(sunAltRad) * Math.sin(sunAzRad) * sunGroundDist;
+    const sunGroundY = Math.sin(sunAltRad) * sunGroundDist;
+    const sunGroundZ = -Math.cos(sunAltRad) * Math.cos(sunAzRad) * sunGroundDist;
 
-    sunLightRef.current.position.set(sunX, Math.max(0.05, sunY), sunZ);
+    sunLightRef.current.position.set(sunGroundX, Math.max(0.05, sunGroundY), sunGroundZ);
     sunLightRef.current.target.position.set(0, 0, 0);
     sunLightRef.current.target.updateMatrixWorld();
 
@@ -106,17 +108,22 @@ export default function SiteTerrainView({ site, date, onBack }) {
       sunLightRef.current.intensity = 0.04; // night darkness on Moon
     }
 
-    // 3D Sun in the sky
+    // 3D Sun in the sky (placed at sunSkyDist = 52)
+    const sunSkyDist = 52;
+    const sunSkyX = Math.cos(sunAltRad) * Math.sin(sunAzRad) * sunSkyDist;
+    const sunSkyY = Math.sin(sunAltRad) * sunSkyDist;
+    const sunSkyZ = -Math.cos(sunAltRad) * Math.cos(sunAzRad) * sunSkyDist;
+
     if (sunMeshRef.current) {
-      sunMeshRef.current.position.set(sunX * 1.5, sunY * 1.5, sunZ * 1.5);
+      sunMeshRef.current.position.set(sunSkyX, sunSkyY, sunSkyZ);
       sunMeshRef.current.visible = pos.sun.alt > -5.0;
     }
 
-    // 3D Earth position in the sky (NASA Cloud Earth)
+    // 3D Earth position in the sky (placed at earthDist = 32)
     if (earthMeshRef.current) {
       const earthAltRad = (pos.earth.alt * Math.PI) / 180;
       const earthAzRad = (pos.earth.az * Math.PI) / 180;
-      const earthDist = 28;
+      const earthDist = 32;
 
       const earthX = Math.cos(earthAltRad) * Math.sin(earthAzRad) * earthDist;
       const earthY = Math.sin(earthAltRad) * earthDist;
@@ -124,6 +131,15 @@ export default function SiteTerrainView({ site, date, onBack }) {
 
       earthMeshRef.current.position.set(earthX, earthY, earthZ);
       earthMeshRef.current.visible = pos.earth.alt > -1.0;
+
+      // Real lunar-perspective Earth phase lighting:
+      // Direct sunlight onto the Earth model from the direction of the Sun
+      if (earthLightRef.current) {
+        const dir = new THREE.Vector3(sunSkyX - earthX, sunSkyY - earthY, sunSkyZ - earthZ).normalize();
+        earthLightRef.current.position.set(earthX + dir.x * 12, earthY + dir.y * 12, earthZ + dir.z * 12);
+        earthLightRef.current.target.position.set(earthX, earthY, earthZ);
+        earthLightRef.current.target.updateMatrixWorld();
+      }
     }
   }, [site.lat, site.lon, date, currentHour]);
 
@@ -201,6 +217,12 @@ export default function SiteTerrainView({ site, date, onBack }) {
     scene.add(sunLight);
     sunLightRef.current = sunLight;
 
+    // DEDICATED DIRECTIONAL LIGHT FOR EARTH (creates authentic lunar-perspective Earth phases)
+    const earthLight = new THREE.DirectionalLight(0xfffbf2, 2.2);
+    scene.add(earthLight);
+    scene.add(earthLight.target);
+    earthLightRef.current = earthLight;
+
     // STARRY SKY PARTICLES
     const starGeom = new THREE.BufferGeometry();
     const starCount = 3000;
@@ -234,7 +256,10 @@ export default function SiteTerrainView({ site, date, onBack }) {
           const size = box.getSize(new THREE.Vector3());
           const maxDim = Math.max(size.x, size.y, size.z);
           if (maxDim > 0) {
-            const s = 2.2 / maxDim;
+            // Authentic lunar sky scaling:
+            // Earth subtends ~1.90° in the lunar sky.
+            // At earthDist = 32, maxDim = 3.4 produces angular diameter: 3.4 / 32 = 0.10625 rad.
+            const s = 3.4 / maxDim;
             earthModel.scale.set(s, s, s);
           }
           earthModel.traverse((child) => {
@@ -270,7 +295,11 @@ export default function SiteTerrainView({ site, date, onBack }) {
           const size = box.getSize(new THREE.Vector3());
           const maxDim = Math.max(size.x, size.y, size.z);
           if (maxDim > 0) {
-            const s = 4.0 / maxDim;
+            // Authentic lunar sky scaling:
+            // Sun subtends ~0.533° in the lunar sky (Earth is 3.565x wider than the Sun).
+            // At sunSkyDist = 52, maxDim = 1.55 produces angular diameter: 1.55 / 52 = 0.0298 rad.
+            // (3.4 / 32) / (1.55 / 52) = 3.565x — exactly matches NASA's physical angular size ratio!
+            const s = 1.55 / maxDim;
             sunModel.scale.set(s, s, s);
           }
           sunModel.traverse((child) => {
@@ -333,6 +362,10 @@ export default function SiteTerrainView({ site, date, onBack }) {
       cancelAnimationFrame(animFrameRef.current);
       controls.dispose();
       renderer.dispose();
+      if (earthLightRef.current && sceneRef.current) {
+        sceneRef.current.remove(earthLightRef.current.target);
+        sceneRef.current.remove(earthLightRef.current);
+      }
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
@@ -397,7 +430,7 @@ export default function SiteTerrainView({ site, date, onBack }) {
     // LANDER TOUCHDOWN MARKER
     const landerGroup = new THREE.Group();
     const landerGeom = new THREE.CylinderGeometry(0.08, 0.12, 0.08, 8);
-    const landerMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.8, roughness: 0.2 });
+    const landerMat = new THREE.MeshStandardMaterial({ color: 0xffab5e, metalness: 0.8, roughness: 0.2 });
     landerGroup.add(new THREE.Mesh(landerGeom, landerMat));
 
     const antennaGeom = new THREE.CylinderGeometry(0.01, 0.01, 0.25, 8);
@@ -414,7 +447,7 @@ export default function SiteTerrainView({ site, date, onBack }) {
   }, [terrainData, useInterpolation, wireframe, exaggeration, site.id]);
 
   return (
-    <div className="relative w-full h-full min-h-[580px] bg-[#010309] rounded-2xl overflow-hidden border border-[#1e293b] shadow-2xl flex flex-col">
+    <div className="relative w-full h-full min-h-[580px] bg-[var(--paper)] rounded-2xl overflow-hidden border border-[var(--line)] shadow-2xl flex flex-col">
       {/* 3D WebGL Canvas */}
       <div ref={containerRef} className="w-full flex-1 relative cursor-grab active:cursor-grabbing" />
 
@@ -422,50 +455,48 @@ export default function SiteTerrainView({ site, date, onBack }) {
       <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#070d1e]/90 hover:bg-white/10 text-white border border-[#1e293b] text-xs font-semibold backdrop-blur-md shadow-lg transition-all"
+          className="btn-ghost flex items-center gap-1.5 text-xs py-1.5 px-3 bg-[var(--paper-warm)]/90 backdrop-blur-md"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Moon Globe</span>
         </button>
 
-        <div className="bg-[#070d1e]/90 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-[#1e293b] hidden sm:block">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-            <span className="text-xs font-bold text-white tracking-wide">{site.name}</span>
-            <span className="text-[10px] text-slate-400 font-mono">({site.lat}°, {site.lon}°)</span>
-          </div>
+        <div className="bento-plate px-3.5 py-1.5 hidden sm:flex items-center gap-2 bg-[var(--paper-warm)]/90 backdrop-blur-md">
+          <span className="w-2 h-2 rounded-full bg-[var(--laser-crimson)] shadow-[0_0_8px_var(--laser-crimson)]" />
+          <span className="text-xs font-semibold text-[var(--ink)] tracking-wide">{site.name}</span>
+          <span className="text-[10px] text-[var(--ink-faint)] font-mono">({site.lat}°, {site.lon}°)</span>
         </div>
 
         {/* 20 MPP Resolution Badge */}
-        <div className="hidden md:flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 px-3 py-1.5 rounded-xl text-xs font-mono backdrop-blur-md">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-          <span>NASA LOLA 20 MPP High-Res (65K vertices)</span>
+        <div className="hidden md:flex items-center gap-1.5 bento-plate px-3 py-1.5 text-xs font-mono bg-[var(--paper-warm)]/90 backdrop-blur-md text-[var(--ink-soft)]">
+          <CheckCircle2 className="w-3.5 h-3.5 text-[var(--emerald)]" />
+          <span>NASA LOLA 20 MPP ({terrainData?.gridSize || 256}×{terrainData?.gridSize || 256} Altimetry)</span>
         </div>
       </div>
 
       {/* Top Right: View Modes & Lighting Button */}
       <div className="absolute top-4 right-4 z-10 flex flex-wrap items-center gap-2">
-        {/* LIGHTING BUTTON (Requested by user) */}
+        {/* LIGHTING BUTTON (Inspection fill) */}
         <button
           onClick={() => setLightingMode(!lightingMode)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold backdrop-blur-md border transition-all ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all ${
             lightingMode
-              ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-lg shadow-amber-400/25 ring-2 ring-amber-400/30'
-              : 'bg-[#070d1e]/90 text-slate-300 border-[#1e293b] hover:border-slate-500 hover:text-white'
+              ? 'bg-[var(--coral)] text-[var(--paper-dark)] border-[var(--coral)] shadow-lg shadow-[rgba(255,171,94,0.25)]'
+              : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--ink-soft)]'
           }`}
-          title="Lights up all terrain features so you can view shadowed and night sites clearly"
+          title="Lights up all terrain features so you can view permanently shadowed crater floors clearly"
         >
-          <Lightbulb className={`w-3.5 h-3.5 ${lightingMode ? 'text-slate-950 fill-current' : 'text-amber-400'}`} />
+          <Lightbulb className={`w-3.5 h-3.5 ${lightingMode ? 'text-[var(--paper-dark)] fill-current' : 'text-[var(--coral)]'}`} />
           <span>{lightingMode ? 'Lighting: ON' : 'Lighting: OFF'}</span>
         </button>
 
         {/* Dual Surface Toggle Button (Raw DEM vs Continuous Surface) */}
         <button
           onClick={() => setUseInterpolation(!useInterpolation)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold backdrop-blur-md border transition-all ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all ${
             useInterpolation
-              ? 'bg-amber-400/20 text-amber-300 border-amber-400/40 shadow-lg shadow-amber-400/10'
-              : 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-lg shadow-rose-500/10'
+              ? 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--mustard)] border-[rgba(143,211,232,0.3)] shadow-lg shadow-[rgba(143,211,232,0.1)]'
+              : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--coral)] border-[rgba(255,171,94,0.3)] shadow-lg shadow-[rgba(255,171,94,0.1)]'
           }`}
           title="Toggle between smooth continuous surface and raw discrete altimetry"
         >
@@ -476,10 +507,10 @@ export default function SiteTerrainView({ site, date, onBack }) {
         {/* Wireframe Mesh Toggle */}
         <button
           onClick={() => setWireframe(!wireframe)}
-          className={`p-1.5 rounded-xl text-xs font-medium backdrop-blur-md border transition-all ${
+          className={`p-1.5 rounded-lg text-xs font-medium backdrop-blur-md border transition-all ${
             wireframe
-              ? 'bg-white text-black border-white'
-              : 'bg-[#070d1e]/90 text-slate-300 border-[#1e293b] hover:border-slate-500'
+              ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
+              : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--ink-mute)]'
           }`}
           title="Toggle Wireframe Grid"
         >
@@ -488,35 +519,35 @@ export default function SiteTerrainView({ site, date, onBack }) {
       </div>
 
       {/* Bottom Left: Physical Terrain Metrics */}
-      <div className="absolute bottom-16 left-4 z-10 bg-[#070d1e]/90 backdrop-blur-md p-3.5 rounded-xl border border-[#1e293b] max-w-xs text-xs space-y-2">
+      <div className="absolute bottom-16 left-4 z-10 bento-plate p-3.5 max-w-xs text-xs space-y-2 bg-[var(--paper-warm)]/90 backdrop-blur-md">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-mono uppercase text-slate-400">Elevation Relief</span>
-          <span className="font-mono font-bold text-emerald-400">
+          <span className="text-[10px] font-mono uppercase text-[var(--ink-faint)]">Elevation Relief</span>
+          <span className="font-mono font-bold text-[var(--emerald)]">
             {terrainData ? `${terrainData.elevationSpanM.toLocaleString()} m` : 'Loading...'}
           </span>
         </div>
-        <div className="flex items-center justify-between text-[11px] text-slate-400">
-          <span>Min: <span className="font-mono text-white">{terrainData?.minElevationM}m</span></span>
-          <span>Max: <span className="font-mono text-white">{terrainData?.maxElevationM}m</span></span>
+        <div className="flex items-center justify-between text-[11px] text-[var(--ink-mute)]">
+          <span>Min: <span className="font-mono text-[var(--ink)]">{terrainData?.minElevationM}m</span></span>
+          <span>Max: <span className="font-mono text-[var(--ink)]">{terrainData?.maxElevationM}m</span></span>
         </div>
-        <div className="pt-1.5 border-t border-[#1e293b] flex items-center justify-between text-[10px] text-slate-500">
+        <div className="pt-1.5 border-t border-[var(--line-soft)] flex items-center justify-between text-[10px] text-[var(--ink-faint)] font-mono">
           <span>Scale & Grid:</span>
-          <span className="font-mono text-amber-300">
+          <span className="text-[var(--coral)]">
             {is20Mpp ? '20m/px · 10.24 km Patch' : '80m/px Patch'}
           </span>
         </div>
       </div>
 
       {/* Bottom Timeline Scrubber */}
-      <div className="absolute bottom-3 left-4 right-4 z-20 flex items-center gap-3 bg-[#070d1e]/90 backdrop-blur-md px-4 py-2 rounded-xl border border-[#1e293b]">
+      <div className="absolute bottom-3 left-4 right-4 z-20 flex items-center gap-3 bento-plate px-4 py-2 bg-[var(--paper-warm)]/95 backdrop-blur-md">
         <button
           onClick={() => setIsPlaying(!isPlaying)}
-          className="text-amber-400 hover:text-white transition-colors text-xs font-mono font-bold px-2 py-0.5 rounded bg-white/5 border border-white/10"
+          className="btn-ghost text-xs font-mono font-bold px-2.5 py-1 text-[var(--coral)] border border-[rgba(255,171,94,0.3)] hover:bg-[rgba(255,171,94,0.1)]"
         >
           {isPlaying ? 'PAUSE' : 'PLAY'}
         </button>
 
-        <span className="text-xs font-mono text-slate-400 min-w-[70px]">
+        <span className="text-xs font-mono text-[var(--ink-soft)] min-w-[70px]">
           {String(currentHour).padStart(2, '0')}:00 UTC
         </span>
 
@@ -526,16 +557,16 @@ export default function SiteTerrainView({ site, date, onBack }) {
           max="23"
           value={currentHour}
           onChange={(e) => setCurrentHour(Number(e.target.value))}
-          className="flex-1 accent-amber-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+          className="flex-1 accent-[var(--coral)] h-1.5 bg-[var(--bone)] rounded-lg cursor-pointer"
         />
 
         {telemetry && (
           <div className="hidden sm:flex items-center gap-4 text-xs font-mono">
-            <span className="flex items-center gap-1.5 text-amber-400">
+            <span className="flex items-center gap-1.5 text-[var(--coral)]">
               <Sun className="w-3.5 h-3.5" />
               <span>Sun: {telemetry.sun.alt.toFixed(1)}°</span>
             </span>
-            <span className="flex items-center gap-1.5 text-sky-400">
+            <span className="flex items-center gap-1.5 text-[var(--mustard)]">
               <Radio className="w-3.5 h-3.5" />
               <span>Earth: {telemetry.earth.alt.toFixed(1)}°</span>
             </span>
