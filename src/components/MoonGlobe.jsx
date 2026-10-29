@@ -232,10 +232,62 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     scene.add(solarGroup);
     solarRaysGroupRef.current = solarGroup;
 
-    // ── LOAD AUTHENTIC NASA 3D GLB MODELS ───────────────────
+    // ── INSTANT CELESTIAL RENDERING (0.05s Load Time) ───────
+    // Immediately display photorealistic textured celestial bodies on Frame 1,
+    // then progressively upgrade to heavy 3D GLBs when background downloads complete.
+    const texLoader = new THREE.TextureLoader();
+
+    // 1. Instant Photorealistic Moon (LROC 2K Global Mosaic - 457 KB)
+    const moonTex = texLoader.load('/textures/lroc_color_2k.jpg');
+    moonTex.colorSpace = THREE.SRGBColorSpace;
+    const initialMoonGeom = new THREE.SphereGeometry(1.0, 64, 64);
+    const initialMoonMat = new THREE.MeshStandardMaterial({
+      map: moonTex,
+      roughness: 0.92,
+      metalness: 0.05,
+    });
+    const initialMoon = new THREE.Mesh(initialMoonGeom, initialMoonMat);
+    initialMoon.receiveShadow = true;
+    initialMoon.castShadow = true;
+    scene.add(initialMoon);
+    moonModelRef.current = initialMoon;
+
+    // 2. Instant Photorealistic Earth (NASA 2K Earth & Oceans - 463 KB)
+    const earthTex = texLoader.load('/textures/earth_2k.jpg');
+    earthTex.colorSpace = THREE.SRGBColorSpace;
+    const initialEarthGeom = new THREE.SphereGeometry(1.0, 48, 48);
+    const initialEarthMat = new THREE.MeshStandardMaterial({
+      map: earthTex,
+      roughness: 0.55,
+      metalness: 0.1,
+    });
+    const initialEarth = new THREE.Mesh(initialEarthGeom, initialEarthMat);
+    initialEarth.receiveShadow = true;
+    initialEarth.castShadow = true;
+    initialEarth.userData.naturalDim = 2.0; // unit diameter = 2.0
+    scene.add(initialEarth);
+    earthModelRef.current = initialEarth;
+
+    // 3. Instant Radiant Sun (NASA SDO 2K Photosphere - 822 KB)
+    const sunTex = texLoader.load('/textures/sun_texture_2k.jpg');
+    sunTex.colorSpace = THREE.SRGBColorSpace;
+    const initialSunGeom = new THREE.SphereGeometry(1.0, 32, 32);
+    const initialSunMat = new THREE.MeshBasicMaterial({
+      map: sunTex,
+      color: 0xfff6dd,
+    });
+    const initialSun = new THREE.Mesh(initialSunGeom, initialSunMat);
+    initialSun.userData.naturalDim = 2.0; // unit diameter = 2.0
+    scene.add(initialSun);
+    sunModelRef.current = initialSun;
+
+    // Immediately calculate positions and scales for instant bodies
+    if (updateEphemerisRef.current) updateEphemerisRef.current();
+
+    // ── PROGRESSIVE ENHANCEMENT: ASYNC 3D TOPOGRAPHICAL GLBS ──
     const gltfLoader = new GLTFLoader();
 
-    // 1. Moon Model (LRO 3D Topography)
+    // 1. Upgrade Moon to 3D Topographical Mesh
     gltfLoader.load(
       '/models/moon_small.glb',
       (gltf) => {
@@ -257,23 +309,16 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
             }
           }
         });
+        scene.remove(initialMoon);
         scene.add(moon);
         moonModelRef.current = moon;
         if (updateEphemerisRef.current) updateEphemerisRef.current();
       },
       undefined,
-      () => {
-        const geom = new THREE.SphereGeometry(1.0, 64, 64);
-        const mat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.9 });
-        const mesh = new THREE.Mesh(geom, mat);
-        scene.add(mesh);
-        moonModelRef.current = mesh;
-        if (updateEphemerisRef.current) updateEphemerisRef.current();
-      }
+      (err) => console.log('Using instant LROC textured Moon')
     );
 
-    // 2. Earth Model (NASA EarthClouds_1_12756.glb)
-    // NASA measured radius: 6,371 km = 3.667x Moon radius
+    // 2. Upgrade Earth to NASA 3D Cloud Model
     gltfLoader.load(
       '/models/earth.glb',
       (gltf) => {
@@ -282,33 +327,22 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         earth.userData.naturalDim = maxDim;
-        if (maxDim > 0) {
-          const s = (NASA.EARTH_R_RATIO * 2) / maxDim; // Earth diameter = 7.334 units
-          earth.scale.set(s, s, s);
-        }
         earth.traverse((child) => {
           if (child.isMesh) {
             child.receiveShadow = true;
             child.castShadow = true;
           }
         });
+        scene.remove(initialEarth);
         scene.add(earth);
         earthModelRef.current = earth;
         if (updateEphemerisRef.current) updateEphemerisRef.current();
       },
       undefined,
-      () => {
-        const geom = new THREE.SphereGeometry(NASA.EARTH_R_RATIO, 32, 32);
-        const mat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.5 });
-        const mesh = new THREE.Mesh(geom, mat);
-        scene.add(mesh);
-        earthModelRef.current = mesh;
-        if (updateEphemerisRef.current) updateEphemerisRef.current();
-      }
+      (err) => console.log('Using instant 2K Earth model')
     );
 
-    // 3. Sun Model (NASA Sun_1_1391000.glb)
-    // NASA measured radius: 696,340 km = 400.8x Moon radius
+    // 3. Upgrade Sun to NASA 3D Solar Model
     gltfLoader.load(
       '/models/sun.glb',
       (gltf) => {
@@ -317,29 +351,19 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         sun.userData.naturalDim = maxDim;
-        if (maxDim > 0) {
-          const s = (NASA.SUN_R_RATIO * 2) / maxDim; // Sun diameter = 801.6 units in True scale
-          sun.scale.set(s, s, s);
-        }
         sun.traverse((child) => {
           if (child.isMesh && child.material) {
             child.material.emissive = new THREE.Color(0xffaa22);
             child.material.emissiveIntensity = 1.6;
           }
         });
+        scene.remove(initialSun);
         scene.add(sun);
         sunModelRef.current = sun;
         if (updateEphemerisRef.current) updateEphemerisRef.current();
       },
       undefined,
-      () => {
-        const geom = new THREE.SphereGeometry(NASA.SUN_R_RATIO, 32, 32);
-        const mat = new THREE.MeshBasicMaterial({ color: 0xffcc33 });
-        const mesh = new THREE.Mesh(geom, mat);
-        scene.add(mesh);
-        sunModelRef.current = mesh;
-        if (updateEphemerisRef.current) updateEphemerisRef.current();
-      }
+      (err) => console.log('Using instant 2K Sun model')
     );
 
     // BUILD CANDIDATE SITE MARKERS (Obsidian Ring + Laser Crimson Pin)

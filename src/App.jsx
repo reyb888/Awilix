@@ -230,9 +230,18 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('globe');
   const [verificationOpen, setVerificationOpen] = useState(false);
 
-  // Preload NASA DE421 ephemeris dataset
+  // Preload NASA DE421 ephemeris dataset & background preload terrain
   useEffect(() => {
     loadMoonInfo2026().catch(() => console.warn('Using analytical ephemeris'));
+
+    // Idle background prefetch for candidate landing site terrains
+    const timer = setTimeout(() => {
+      sites.forEach((s) => {
+        fetch(`/terrain/${s.id}_terrain_20mpp.json`).catch(() => {});
+        fetch(`/terrain/${s.id}_texture_20mpp.png`).catch(() => {});
+      });
+    }, 2000);
+    return () => clearTimeout(timer);
   }, []);
 
   // Compute analysis span in hours

@@ -9,10 +9,14 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { computePositions } from '../lib/ephemeris.js';
+import sites from '../data/sites.json';
 import {
   ArrowLeft, Sun, Radio, Compass, Mountain, Layers, Play,
   Pause, Sparkles, RefreshCw, Grid, Eye, Lightbulb, CheckCircle2
 } from 'lucide-react';
+
+// Global in-memory cache for instant 0ms site switching
+const terrainCache = new Map();
 
 export default function SiteTerrainView({ site, date, onBack }) {
   const containerRef = useRef(null);
@@ -34,34 +38,80 @@ export default function SiteTerrainView({ site, date, onBack }) {
   const [lightingMode, setLightingMode] = useState(false); // Global inspect fill
   const [useInterpolation, setUseInterpolation] = useState(true); // Raw DEM vs Continuous
   const [wireframe, setWireframe] = useState(false);
-  const [terrainData, setTerrainData] = useState(null);
+  const [terrainData, setTerrainData] = useState(terrainCache.get(site.id) || null);
+  const [loading, setLoading] = useState(!terrainCache.has(site.id));
   const [telemetry, setTelemetry] = useState(null);
   const [exaggeration, setExaggeration] = useState(1.0); // 1.0 = Real 1:1 Physical Aspect Ratio
-  const [is20Mpp, setIs20Mpp] = useState(false);
+  const [is20Mpp, setIs20Mpp] = useState(terrainCache.get(site.id)?.is20Mpp ?? false);
 
-  // Fetch site-specific authentic NASA LOLA dataset (20 MPP with fallback)
+  // Fetch site-specific authentic NASA LOLA dataset (20 MPP with instant in-memory cache)
   useEffect(() => {
+    // 1. Instant 0ms load if cached
+    if (terrainCache.has(site.id)) {
+      const cached = terrainCache.get(site.id);
+      setTerrainData(cached);
+      setIs20Mpp(cached.is20Mpp ?? true);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    // Immediately remove previous site's terrain mesh so user never sees old site under new name
+    if (terrainMeshRef.current && sceneRef.current) {
+      sceneRef.current.remove(terrainMeshRef.current);
+      terrainMeshRef.current = null;
+    }
+
     fetch(`/terrain/${site.id}_terrain_20mpp.json`)
       .then((res) => {
         if (!res.ok) throw new Error(`20 MPP not found: HTTP ${res.status}`);
         return res.json();
       })
       .then((data) => {
+        data.is20Mpp = true;
+        terrainCache.set(site.id, data);
         setTerrainData(data);
         setIs20Mpp(true);
-        console.log(`✓ Loaded authentic 20 MPP terrain for ${site.name}`);
+        setLoading(false);
       })
       .catch((err) => {
         console.warn('Falling back to standard terrain:', err);
         fetch(`/terrain/${site.id}_terrain.json`)
           .then((r) => r.json())
           .then((fallbackData) => {
+            fallbackData.is20Mpp = false;
+            terrainCache.set(site.id, fallbackData);
             setTerrainData(fallbackData);
             setIs20Mpp(false);
+            setLoading(false);
           })
-          .catch((e) => console.error('Failed to load terrain JSON:', e));
+          .catch((e) => {
+            console.error('Failed to load terrain JSON:', e);
+            setLoading(false);
+          });
       });
   }, [site.id, site.name]);
+
+  // Background idle pre-fetch for all candidate sites
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      sites.forEach((s) => {
+        if (!terrainCache.has(s.id)) {
+          fetch(`/terrain/${s.id}_terrain_20mpp.json`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+              if (data) {
+                data.is20Mpp = true;
+                terrainCache.set(s.id, data);
+              }
+            })
+            .catch(() => {});
+        }
+      });
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Handle Lighting Mode toggle
   useEffect(() => {
@@ -239,88 +289,41 @@ export default function SiteTerrainView({ site, date, onBack }) {
     const starMat = new THREE.PointsMaterial({ size: 0.8, color: 0xffffff, transparent: true, opacity: 0.9 });
     scene.add(new THREE.Points(starGeom, starMat));
 
-    const gltfLoader = new GLTFLoader();
+    // ── INSTANT CELESTIAL BODIES IN SKY (0ms load time, 0MB GLB network overhead) ─
+    const texLoader = new THREE.TextureLoader();
 
-    // ── 1. LOAD AUTHENTIC NASA CLOUD EARTH IN SKY ───────────────
-    const earthUrls = [
-      '/earth,sun,moon textures and models/EarthClouds_1_12756.glb',
-      '/models/earth.glb',
-    ];
-    const loadSkyEarth = (index = 0) => {
-      if (index >= earthUrls.length) return;
-      gltfLoader.load(
-        earthUrls[index],
-        (gltf) => {
-          const earthModel = gltf.scene;
-          const box = new THREE.Box3().setFromObject(earthModel);
-          const size = box.getSize(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-          if (maxDim > 0) {
-            // Authentic lunar sky scaling:
-            // Earth subtends ~1.90° in the lunar sky.
-            // At earthDist = 32, maxDim = 3.4 produces angular diameter: 3.4 / 32 = 0.10625 rad.
-            const s = 3.4 / maxDim;
-            earthModel.scale.set(s, s, s);
-          }
-          earthModel.traverse((child) => {
-            if (child.isMesh && child.material) {
-              child.material.depthTest = true;
-              child.material.depthWrite = true;
-            }
-          });
-          earthModel.position.set(0, -9999, 0);
-          earthModel.visible = false;
-          scene.add(earthModel);
-          earthMeshRef.current = earthModel;
-          updateLighting();
-        },
-        undefined,
-        () => loadSkyEarth(index + 1)
-      );
-    };
-    loadSkyEarth(0);
+    // 1. Instant Photorealistic Earth in sky (Uses cached 2K Earth mosaic)
+    // Scaled to diameter 3.4 at earthDist = 32 (angular size ~1.90° from lunar surface)
+    const earthTex = texLoader.load('/textures/earth_2k.jpg');
+    earthTex.colorSpace = THREE.SRGBColorSpace;
+    const earthGeom = new THREE.SphereGeometry(1.7, 36, 36);
+    const earthMat = new THREE.MeshStandardMaterial({
+      map: earthTex,
+      roughness: 0.55,
+      metalness: 0.1,
+    });
+    const earthMesh = new THREE.Mesh(earthGeom, earthMat);
+    earthMesh.position.set(0, -9999, 0);
+    earthMesh.visible = false;
+    scene.add(earthMesh);
+    earthMeshRef.current = earthMesh;
 
-    // ── 2. LOAD AUTHENTIC NASA SUN MODEL IN SKY ─────────────────
-    const sunUrls = [
-      '/earth,sun,moon textures and models/Sun_1_1391000.glb',
-      '/models/sun.glb',
-    ];
-    const loadSkySun = (index = 0) => {
-      if (index >= sunUrls.length) return;
-      gltfLoader.load(
-        sunUrls[index],
-        (gltf) => {
-          const sunModel = gltf.scene;
-          const box = new THREE.Box3().setFromObject(sunModel);
-          const size = box.getSize(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-          if (maxDim > 0) {
-            // Authentic lunar sky scaling:
-            // Sun subtends ~0.533° in the lunar sky (Earth is 3.565x wider than the Sun).
-            // At sunSkyDist = 52, maxDim = 1.55 produces angular diameter: 1.55 / 52 = 0.0298 rad.
-            // (3.4 / 32) / (1.55 / 52) = 3.565x — exactly matches NASA's physical angular size ratio!
-            const s = 1.55 / maxDim;
-            sunModel.scale.set(s, s, s);
-          }
-          sunModel.traverse((child) => {
-            if (child.isMesh && child.material) {
-              child.material.emissive = new THREE.Color(0xffbb33);
-              child.material.emissiveIntensity = 1.0;
-              child.material.depthTest = true;
-              child.material.depthWrite = true;
-            }
-          });
-          sunModel.position.set(0, -9999, 0);
-          sunModel.visible = false;
-          scene.add(sunModel);
-          sunMeshRef.current = sunModel;
-          updateLighting();
-        },
-        undefined,
-        () => loadSkySun(index + 1)
-      );
-    };
-    loadSkySun(0);
+    // 2. Instant Radiant Solar Star in sky (Uses cached 2K SDO texture)
+    // Scaled to diameter 1.55 at sunSkyDist = 52 (Earth is exactly 3.565x wider in the lunar sky)
+    const sunTex = texLoader.load('/textures/sun_texture_2k.jpg');
+    sunTex.colorSpace = THREE.SRGBColorSpace;
+    const sunGeom = new THREE.SphereGeometry(0.775, 32, 32);
+    const sunMat = new THREE.MeshBasicMaterial({
+      map: sunTex,
+      color: 0xfff3d1,
+    });
+    const sunMesh = new THREE.Mesh(sunGeom, sunMat);
+    sunMesh.position.set(0, -9999, 0);
+    sunMesh.visible = false;
+    scene.add(sunMesh);
+    sunMeshRef.current = sunMesh;
+
+    updateLighting();
 
     // COMPASS ROSE (North / East pointers on ground)
     const compassGroup = new THREE.Group();
@@ -450,6 +453,28 @@ export default function SiteTerrainView({ site, date, onBack }) {
     <div className="relative w-full h-full min-h-[580px] bg-[var(--paper)] rounded-2xl overflow-hidden border border-[var(--line)] shadow-2xl flex flex-col">
       {/* 3D WebGL Canvas */}
       <div ref={containerRef} className="w-full flex-1 relative cursor-grab active:cursor-grabbing" />
+
+      {/* High-Tech NASA Altimetry Acquisition HUD Overlay */}
+      {loading && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#060910]/85 backdrop-blur-md animate-fade-in pointer-events-none">
+          <div className="relative mb-3">
+            <div className="w-12 h-12 rounded-full border-2 border-[var(--coral)] border-t-transparent animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-[var(--coral)] font-bold">
+              20M
+            </div>
+          </div>
+          <div className="text-xs font-mono font-bold text-[var(--ink)] tracking-widest uppercase">
+            Acquiring NASA LOLA 20 MPP Altimetry
+          </div>
+          <div className="text-[11px] font-mono text-[var(--mustard)] mt-1 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[var(--laser-crimson)] animate-ping" />
+            <span>{site.name} · ({site.lat}°, {site.lon}°)</span>
+          </div>
+          <div className="text-[10px] font-mono text-[var(--ink-faint)] mt-1.5">
+            Resolving 65,536 Surface Vertices & Directional Shadows
+          </div>
+        </div>
+      )}
 
       {/* Top Left: Back Button & Site Identity */}
       <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
