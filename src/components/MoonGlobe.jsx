@@ -49,6 +49,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
   const markersGroupRef = useRef(null);
   const dteVectorsGroupRef = useRef(null);
   const solarRaysGroupRef = useRef(null);
+  const updateEphemerisRef = useRef(null);
 
   // Interaction tracking (distinguish drag from click)
   const pointerDownPos = useRef({ x: 0, y: 0 });
@@ -57,7 +58,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
 
   // UI States
   const [currentHour, setCurrentHour] = useState(12);
-  const [scaleMode, setScaleMode] = useState('true'); // 'true' (1:1 NASA) | 'proportional' (Compact Orbit)
+  const [scaleMode, setScaleMode] = useState('proportional'); // 'proportional' (Exploration View) | 'true' (1:1 NASA)
   const [cameraMode, setCameraMode] = useState('geolocked'); // 'geolocked' | 'orbit'
   const [vectorMode, setVectorMode] = useState('all'); // 'all' | 'dte' | 'solar' | 'off'
   const [selectedSiteId, setSelectedSiteId] = useState(selectedSite?.id || sites[0].id);
@@ -72,21 +73,23 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         moonRadius: 1.0,
         earthRadius: NASA.EARTH_R_RATIO, // 3.667 units (nearly 4x Moon diameter!)
         sunRadius: NASA.SUN_R_RATIO,     // 400.8 units (enormous star!)
-        earthDist: NASA.EARTH_DIST_RATIO, // 221.25 units
-        sunDist: NASA.SUN_DIST_RATIO,     // 86,105.0 units
+        earthDist: NASA.EARTH_DIST_RATIO, // 221.25 units (384,400 km)
+        sunDist: NASA.SUN_DIST_RATIO,     // 86,105.0 units (149.6M km)
         maxCameraDist: 250000,
-        label: '1:1 True NASA Scale',
+        label: '1:1 True NASA Scale (Astronomical Distance)',
       };
     } else {
-      // Proportional Compact Orbit view (exact Earth/Moon ratio preserved, distances calibrated for compact frame)
+      // Proportional Spaceflight Exploration view:
+      // Preserves true physical Earth:Moon diameter ratio (3.667:1),
+      // with distances calibrated so Earth and Sun are majestic, clearly visible celestial bodies in the sky!
       return {
         moonRadius: 1.0,
-        earthRadius: NASA.EARTH_R_RATIO, // 3.667 units (true diameter preserved!)
-        sunRadius: 28.0,                 // 28x larger than Moon
-        earthDist: 34.0,                 // 34 units
-        sunDist: 160.0,                  // 160 units
-        maxCameraDist: 1200,
-        label: 'Proportional Orbit Scale',
+        earthRadius: NASA.EARTH_R_RATIO, // 3.667 units (Diameter = 7.334 - almost 4x wider than the Moon!)
+        sunRadius: 16.0,                 // 16.0 units radius (Diameter = 32.0 units - colossal glowing star!)
+        earthDist: 16.0,                 // 16.0 units distance (Earth subtends ~26° of visual angle!)
+        sunDist: 48.0,                   // 48.0 units distance (Sun subtends ~37° of visual angle!)
+        maxCameraDist: 500,
+        label: 'Proportional Spaceflight Scale',
       };
     }
   }, [scaleMode]);
@@ -256,6 +259,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         });
         scene.add(moon);
         moonModelRef.current = moon;
+        if (updateEphemerisRef.current) updateEphemerisRef.current();
       },
       undefined,
       () => {
@@ -264,6 +268,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         const mesh = new THREE.Mesh(geom, mat);
         scene.add(mesh);
         moonModelRef.current = mesh;
+        if (updateEphemerisRef.current) updateEphemerisRef.current();
       }
     );
 
@@ -289,6 +294,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         });
         scene.add(earth);
         earthModelRef.current = earth;
+        if (updateEphemerisRef.current) updateEphemerisRef.current();
       },
       undefined,
       () => {
@@ -297,6 +303,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         const mesh = new THREE.Mesh(geom, mat);
         scene.add(mesh);
         earthModelRef.current = mesh;
+        if (updateEphemerisRef.current) updateEphemerisRef.current();
       }
     );
 
@@ -322,6 +329,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         });
         scene.add(sun);
         sunModelRef.current = sun;
+        if (updateEphemerisRef.current) updateEphemerisRef.current();
       },
       undefined,
       () => {
@@ -330,6 +338,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         const mesh = new THREE.Mesh(geom, mat);
         scene.add(mesh);
         sunModelRef.current = mesh;
+        if (updateEphemerisRef.current) updateEphemerisRef.current();
       }
     );
 
@@ -413,6 +422,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
   // ── UPDATE ASTRONOMICAL POSITIONS & ACTIVE SCALE ──────────
   const updateEphemerisAndScale = useCallback(() => {
     if (!sceneRef.current) return;
+    updateEphemerisRef.current = updateEphemerisAndScale;
 
     const hourStr = String(currentHour).padStart(2, '0');
     const time = new Date(`${date}T${hourStr}:00:00Z`);
@@ -516,29 +526,129 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
       }
     }
 
-    // ── REBUILD CONICAL SOLAR DIVERGENCE RAYS ───────────────
+    // ── REBUILD MATHEMATICAL SOLAR VECTOR FIELD ─────────────
+    // Linear vector field mapping tails on the Sun model to heads all over the Moon's surface
     if (solarRaysGroupRef.current) {
       solarRaysGroupRef.current.clear();
 
       const showSolar = vectorMode === 'all' || vectorMode === 'solar';
       if (showSolar) {
-        const rayCount = 16;
-        for (let i = 0; i < rayCount; i++) {
-          const angle = (i / rayCount) * Math.PI * 2;
-          const coneOffset = new THREE.Vector3(
-            Math.cos(angle) * (scaleConfig.sunRadius * 0.4),
-            Math.sin(angle) * (scaleConfig.sunRadius * 0.4),
-            0
-          );
-          const target = coneOffset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(sunDir.x, sunDir.z));
-          const rayGeom = new THREE.BufferGeometry().setFromPoints([sunPos, target]);
-          const rayMat = new THREE.LineBasicMaterial({
-            color: 0xffab5e,
-            transparent: true,
-            opacity: 0.22,
-          });
-          solarRaysGroupRef.current.add(new THREE.Line(rayGeom, rayMat));
-        }
+        // Construct orthonormal basis on the sunlit hemisphere of the Moon
+        // w points from Moon (0,0,0) directly towards the Sun
+        const w = sunDir.clone().normalize();
+        const arbitrary = Math.abs(w.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+        const u = new THREE.Vector3().crossVectors(arbitrary, w).normalize();
+        const v = new THREE.Vector3().crossVectors(w, u).normalize();
+
+        const linePositions = [];
+        const lineColors = [];
+
+        // Concentric linear zenith rings covering the entire illuminated surface
+        // from subsolar apex (theta = 0) out to the terminator limb (theta = 88°)
+        const rings = [
+          { thetaDeg: 0, count: 1 },    // Subsolar zenith
+          { thetaDeg: 14, count: 6 },   // Core solar flux
+          { thetaDeg: 28, count: 10 },
+          { thetaDeg: 42, count: 14 },  // Mid-latitude flux
+          { thetaDeg: 56, count: 18 },
+          { thetaDeg: 70, count: 22 },  // High-latitude grazing
+          { thetaDeg: 84, count: 26 },  // Lunar terminator rim
+        ];
+
+        rings.forEach(({ thetaDeg, count }) => {
+          const theta = (thetaDeg * Math.PI) / 180;
+          const sinT = Math.sin(theta);
+          const cosT = Math.cos(theta);
+
+          for (let i = 0; i < count; i++) {
+            const phi = count === 1 ? 0 : (i / count) * Math.PI * 2;
+            const cosP = Math.cos(phi);
+            const sinP = Math.sin(phi);
+
+            // Vector Head strictly mapped on the Moon's spherical surface (R_moon = 1.003)
+            const headX = (sinT * cosP * u.x + sinT * sinP * v.x + cosT * w.x) * 1.003;
+            const headY = (sinT * cosP * u.y + sinT * sinP * v.y + cosT * w.y) * 1.003;
+            const headZ = (sinT * cosP * u.z + sinT * sinP * v.z + cosT * w.z) * 1.003;
+            const head = new THREE.Vector3(headX, headY, headZ);
+
+            // Vector Tail starting on the Sun model (spread across the solar disc facing Moon)
+            const discRadius = Math.min(scaleConfig.sunRadius * 0.35, 12.0);
+            const tailX = sunPos.x + (sinT * cosP * u.x + sinT * sinP * v.x) * discRadius;
+            const tailY = sunPos.y + (sinT * cosP * u.y + sinT * sinP * v.y) * discRadius;
+            const tailZ = sunPos.z + (sinT * cosP * u.z + sinT * sinP * v.z) * discRadius;
+            const tail = new THREE.Vector3(tailX, tailY, tailZ);
+
+            // Main solar flux vector line (Tail at Sun → Head on Moon)
+            linePositions.push(tail.x, tail.y, tail.z, head.x, head.y, head.z);
+
+            // Solar ray color: radiant solar amber, with intensity scaling by incidence angle cosT
+            const alpha = 0.20 + cosT * 0.45;
+            lineColors.push(1.0, 0.67, 0.37, alpha * 0.35); // Sun tail color
+            lineColors.push(1.0, 0.82, 0.52, alpha);        // Moon surface impact color
+
+            // Directional Arrowhead at landing point on the Moon surface
+            const rayDir = new THREE.Vector3().subVectors(head, tail).normalize();
+            const arrowLen = 0.045;
+            const arrowWidth = 0.016;
+
+            const a1 = head.clone().sub(rayDir.clone().multiplyScalar(arrowLen)).add(u.clone().multiplyScalar(arrowWidth));
+            linePositions.push(head.x, head.y, head.z, a1.x, a1.y, a1.z);
+            lineColors.push(1.0, 0.88, 0.6, alpha);
+            lineColors.push(1.0, 0.88, 0.6, alpha * 0.7);
+
+            const a2 = head.clone().sub(rayDir.clone().multiplyScalar(arrowLen)).sub(u.clone().multiplyScalar(arrowWidth));
+            linePositions.push(head.x, head.y, head.z, a2.x, a2.y, a2.z);
+            lineColors.push(1.0, 0.88, 0.6, alpha);
+            lineColors.push(1.0, 0.88, 0.6, alpha * 0.7);
+          }
+        });
+
+        // Dedicated highlighted Solar Vectors targeting candidate lunar landing sites
+        sites.forEach((site) => {
+          const latRad = (site.lat * Math.PI) / 180;
+          const lonRad = (site.lon * Math.PI) / 180;
+          const sx = Math.cos(latRad) * Math.sin(lonRad);
+          const sy = Math.sin(latRad);
+          const sz = Math.cos(latRad) * Math.cos(lonRad);
+          const siteVec = new THREE.Vector3(sx, sy, sz).multiplyScalar(1.004);
+
+          // Solar incidence check on local terrain normal
+          const siteNormal = siteVec.clone().normalize();
+          const cosIncidence = siteNormal.dot(w);
+          const isSunlit = cosIncidence > 0;
+
+          if (isSunlit) {
+            const isSelected = site.id === selectedSiteId;
+            linePositions.push(sunPos.x, sunPos.y, sunPos.z, siteVec.x, siteVec.y, siteVec.z);
+            const intensity = isSelected ? 0.95 : 0.65;
+            lineColors.push(1.0, 0.75, 0.4, 0.4);
+            lineColors.push(1.0, 0.92, 0.65, intensity);
+
+            // Arrowhead at site marker
+            const rayDir = new THREE.Vector3().subVectors(siteVec, sunPos).normalize();
+            const a1 = siteVec.clone().sub(rayDir.clone().multiplyScalar(0.06)).add(u.clone().multiplyScalar(0.02));
+            const a2 = siteVec.clone().sub(rayDir.clone().multiplyScalar(0.06)).sub(u.clone().multiplyScalar(0.02));
+            linePositions.push(siteVec.x, siteVec.y, siteVec.z, a1.x, a1.y, a1.z);
+            linePositions.push(siteVec.x, siteVec.y, siteVec.z, a2.x, a2.y, a2.z);
+            lineColors.push(1.0, 0.95, 0.7, intensity);
+            lineColors.push(1.0, 0.95, 0.7, intensity * 0.8);
+            lineColors.push(1.0, 0.95, 0.7, intensity);
+            lineColors.push(1.0, 0.95, 0.7, intensity * 0.8);
+          }
+        });
+
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+        geom.setAttribute('color', new THREE.Float32BufferAttribute(lineColors, 4));
+
+        const mat = new THREE.LineBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+
+        solarRaysGroupRef.current.add(new THREE.LineSegments(geom, mat));
       }
     }
   }, [date, currentHour, vectorMode, selectedSiteId, scaleConfig]);
@@ -595,26 +705,26 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         {/* Scale Mode Selector Button */}
         <div className="flex items-center gap-1.5 bg-[#0a0e17]/90 backdrop-blur-md p-1 rounded-xl border border-[var(--line)]">
           <button
-            onClick={() => setScaleMode('true')}
-            className={`px-3 py-1 rounded-lg text-xs font-mono font-medium transition-colors ${
-              scaleMode === 'true'
-                ? 'bg-[var(--coral)] text-[#120e07] font-semibold shadow-sm'
-                : 'text-[var(--ink-mute)] hover:text-white'
-            }`}
-            title="1:1 Metric Scale: Earth radius 3.67x Moon, Sun radius 401x Moon, Earth distance 221x, Sun distance 86,105x"
-          >
-            1:1 True NASA Scale
-          </button>
-          <button
             onClick={() => setScaleMode('proportional')}
             className={`px-3 py-1 rounded-lg text-xs font-mono font-medium transition-colors ${
               scaleMode === 'proportional'
                 ? 'bg-[var(--mustard)] text-[#060910] font-semibold shadow-sm'
                 : 'text-[var(--ink-mute)] hover:text-white'
             }`}
-            title="Compact Orbit Scale: True Earth 3.67x diameter preserved, orbital distances calibrated for compact screen"
+            title="Proportional View: Earth (3.67x diameter) and Sun (massive star) prominently visible in background"
           >
-            Compact Orbit View
+            Proportional View
+          </button>
+          <button
+            onClick={() => setScaleMode('true')}
+            className={`px-3 py-1 rounded-lg text-xs font-mono font-medium transition-colors ${
+              scaleMode === 'true'
+                ? 'bg-[var(--coral)] text-[#120e07] font-semibold shadow-sm'
+                : 'text-[var(--ink-mute)] hover:text-white'
+            }`}
+            title="1:1 True NASA Scale: Earth at 384,400 km (221 R_moon), Sun at 149.6 Million km (86,105 R_moon)"
+          >
+            1:1 True Astronomical Scale
           </button>
           <button
             onClick={() => setShowScaleDetails(!showScaleDetails)}
