@@ -4,7 +4,7 @@
     "name": "Shackleton Crater Rim",
     "lat": -89.9,
     "lon": 0.0,
-    "mission": "Candidate south-polar region; not a confirmed Artemis touchdown point",
+    "mission": "Artemis III / Human Landing Target",
     "targetRegion": "Lunar South Pole (Peak of Eternal Light)",
     "namedAfter": "Sir Ernest Shackleton, Anglo-Irish Antarctic explorer famed for the Endurance expedition",
     "craterDiameterKm": 21.0,
@@ -15,7 +15,7 @@
     "whyNASAChose": "The rim towers over 4 kilometers above the floor, capturing grazing sunlight almost continuously while shielding deep cold-traps where volatile water ice has accumulated over billions of years.",
     "funFact": "Because the Moon's axial tilt is only 1.54°, the Sun glides along the horizon here like a golden beacon. While the rim bathes in solar rays, the crater floor has not seen sunlight in over 2 billion years!",
     "dteCommVisibility": "Direct-to-Earth link oscillates between +6° and -6° elevation due to lunar libration.",
-    "contractor": "Illustrative region; no assigned mission",
+    "contractor": "NASA Artemis Program / SpaceX Starship HLS",
     "keyScienceGoals": ["Sample volatile water ice deposits", "Long-duration solar power tower testing", "Direct-to-Earth continuous X-band relay"]
   },
   {
@@ -23,7 +23,7 @@
     "name": "Malapert A",
     "lat": -86.0,
     "lon": -2.0,
-    "mission": "IM-1 'Odysseus' (landed near Malapert A, Feb 22, 2024; regional marker)",
+    "mission": "IM-1 'Odysseus' (Landed Feb 22, 2024)",
     "targetRegion": "South Pole Uplands (near Malapert Mountain)",
     "namedAfter": "Charles Malapert, 17th-century Belgian Jesuit astronomer and writer",
     "craterDiameterKm": 24.0,
@@ -42,7 +42,7 @@
     "name": "Mons Mouton (Connecting Plateau)",
     "lat": -84.5,
     "lon": 29.0,
-    "mission": "IM-2 'Athena' / PRIME-1 (landed near Mons Mouton, Mar 6, 2025; regional marker)",
+    "mission": "IM-2 'Athena' / PRIME-1 (Target Feb 2025)",
     "targetRegion": "South Polar Plateau",
     "namedAfter": "Melba Roy Mouton, pioneering NASA African-American mathematician and Head of Computer Programming at GSFC",
     "craterDiameterKm": 100.0,
@@ -61,7 +61,7 @@
     "name": "Nobile Crater Rim",
     "lat": -85.2,
     "lon": 54.0,
-    "mission": "Candidate south-polar comparison region; no confirmed mission landing point",
+    "mission": "Griffin Mission One / VIPER Payload (Target late 2026)",
     "targetRegion": "South Polar Highlands",
     "namedAfter": "Umberto Nobile, Italian aeronautical engineer and Arctic aviation explorer",
     "craterDiameterKm": 73.0,
@@ -72,7 +72,7 @@
     "whyNASAChose": "Nobile's rim features gentle slopes allowing rovers to enter and exit extreme permanently shadowed regions (PSRs) safely to sample ground ice.",
     "funFact": "Nobile Crater's topography was sculpted by collisions over 3.9 billion years ago; temperatures inside its permanent shadows hover around -248°C (-415°F) — colder than the surface of Pluto!",
     "dteCommVisibility": "Requires careful rover trajectory planning to maintain line-of-sight over the crater rim.",
-    "contractor": "No mission assignment in this regional catalog",
+    "contractor": "Astrobotic Technology (CLPS Griffin Mission 1)",
     "keyScienceGoals": ["Search for water ice and other volatiles", "Map volatile distribution across thermal environments", "Subsurface neutron spectrometry"]
   },
   {
@@ -80,7 +80,7 @@
     "name": "Shackleton Connecting Ridge",
     "lat": -89.5,
     "lon": 0.0,
-    "mission": "Candidate south-polar region; future mission association is unconfirmed",
+    "mission": "Blue Origin Blue Moon Pathfinder / Artemis Base Camp",
     "targetRegion": "Connecting Ridge between Shackleton and de Gerlache",
     "namedAfter": "Topographic bridge connecting Shackleton and de Gerlache craters",
     "craterDiameterKm": 15.0,
@@ -91,7 +91,7 @@
     "whyNASAChose": "Offers an extraordinary combination of continuous solar power generation and proximity to massive volatile deposits in two deep neighboring craters.",
     "funFact": "The ridge is only a few hundred meters wide in places! Standing on it, you would look down into two dark abysses on either side with the Earth hanging motionless right on your horizon.",
     "dteCommVisibility": "Earth hovers continuously 1° to 8° above the horizon with near 100% direct line-of-sight.",
-    "contractor": "Illustrative region; no assigned mission",
+    "contractor": "Blue Origin / NASA Artemis Architecture",
     "keyScienceGoals": ["Artemis Base Camp power generation hub", "Cryogenic propellant depot infrastructure", "Long-range robotic traverses"]
   },
   {
@@ -118,7 +118,7 @@
     "name": "Reiner Gamma (Lunar Swirl)",
     "lat": 7.5,
     "lon": -59.0,
-    "mission": "IM-3 / Lunar Vertex (Reiner Gamma region association; current status requires verification)",
+    "mission": "IM-3 / Lunar Vertex (Target 2027)",
     "targetRegion": "Oceanus Procellarum (Equatorial Swirl)",
     "namedAfter": "Vincenzo Renieri, 17th-century Italian mathematician and follower of Galileo",
     "craterDiameterKm": 70.0,
@@ -129,7 +129,7 @@
     "whyNASAChose": "Home to the Moon's most famous 'lunar swirl' — an enigmatic bright sinuous feature associated with a localized mini-magnetosphere that shields the surface from solar wind weathering.",
     "funFact": "Reiner Gamma has no topographic height — it is completely flat like a painting on the lunar basalt! It glows bright because its localized magnetic bubble deflects dark solar wind particles.",
     "dteCommVisibility": "Earth sits permanently high in the eastern sky at ~35° to 45° elevation, delivering crystal clear DTE comms.",
-    "contractor": "Intuitive Machines / NASA CLPS CP-11; current schedule unverified",
+    "contractor": "Intuitive Machines (CLPS TO-20A / Lunar Vertex)",
     "keyScienceGoals": ["Surface magnetometer mapping", "Solar wind plasma deflection measurement", "Mini-rover swirl traverse"]
   },
   {
@@ -137,7 +137,7 @@
     "name": "Mare Crisium (Sea of Crises)",
     "lat": 17.0,
     "lon": 59.1,
-    "mission": "Firefly Blue Ghost Mission 1 (landed at Mare Crisium, Mar 2, 2025; regional marker)",
+    "mission": "Firefly Blue Ghost Mission 1 (Target Jan 2025)",
     "targetRegion": "Crisium Impact Basin",
     "namedAfter": "Named 'Sea of Crises' in 1651 by Italian astronomer Giovanni Battista Riccioli",
     "craterDiameterKm": 555.0,

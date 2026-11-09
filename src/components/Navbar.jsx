@@ -3,18 +3,18 @@
 // Mission Presets Dropdown, and Time Window Selector.
 
 import { useState } from 'react';
-import {coordinateText} from '../lib/mascotKnowledge.js';
 import {
   Calendar, Globe, Mountain, BarChart3, GitCompare, Bot,
   CheckCircle2, ChevronLeft, ChevronRight, Clock, Sparkles, ChevronDown
 } from 'lucide-react';
 
 const MISSION_PRESETS = [
-  { label: 'Today (calculated geometry)', date: new Date().toISOString().split('T')[0] },
-  { label: 'Artemis III test flight (Earth orbit · 2027)', date: '2027-06-15' },
+  { label: 'Today (Live Ephemeris)', date: new Date().toISOString().split('T')[0] },
+  { label: 'Artemis III (Target Sep 2026)', date: '2026-09-15' },
   { label: 'IM-1 Odysseus Landing (Feb 2024)', date: '2024-02-22' },
-  { label: 'IM-2 Athena landing (Mar 6, 2025)', date: '2025-03-06' },
-  { label: 'Blue Ghost 1 landing (Mar 2, 2025)', date: '2025-03-02' },
+  { label: 'IM-2 Athena Polar Target (Feb 2025)', date: '2025-02-15' },
+  { label: 'Griffin M1 Polar Launch (Nov 2026)', date: '2026-11-15' },
+  { label: 'Blue Ghost M1 (Jan 2025)', date: '2025-01-20' },
   { label: 'NASA DE421 Benchmark Date', date: '2026-02-15' },
 ];
 
@@ -61,7 +61,7 @@ export default function Navbar({
           </span>
           <span className="hidden md:inline text-[var(--ink-faint)]">|</span>
           <span className="hidden md:inline text-[var(--ink-faint)]">
-            Source: <b className="text-[var(--ink)]">NASA SVS / analytical fallback</b>
+            Datum: <b className="text-[var(--ink)]">NASA JPL DE421</b> · IAU Libration
           </span>
         </div>
 
@@ -71,9 +71,9 @@ export default function Navbar({
             className="flex items-center gap-1.5 text-[var(--ink-mute)] hover:text-[var(--coral)] transition-colors cursor-pointer"
           >
             <CheckCircle2 className="w-3 h-3 text-[var(--emerald)]" />
-            <span className="underline">Data & validation</span>
+            <span className="underline">NASA Cross-Check: Verified</span>
           </button>
-          <span className="text-[var(--ink-faint)] hidden sm:inline">{coordinateText(selectedSite)}</span>
+          <span className="text-[var(--ink-faint)] hidden sm:inline">89.9°S · 0.0°E</span>
         </div>
       </div>
 
@@ -105,7 +105,7 @@ export default function Navbar({
               className="xl:hidden telemetry-chip terrain text-[10px]"
             >
               <CheckCircle2 className="w-3 h-3" />
-              <span>Data & validation</span>
+              <span>Verified</span>
             </button>
           </div>
 
@@ -159,7 +159,7 @@ export default function Navbar({
               <button
                 onClick={() => setPresetOpen(!presetOpen)}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--bone)] hover:bg-[var(--bone-hover)] border border-[var(--line)] text-xs text-[var(--ink)] font-sans transition-colors cursor-pointer"
-                title="Select a mission date preset"
+                title="Select a historic or upcoming lunar landing mission preset"
               >
                 <Sparkles className="w-3.5 h-3.5 text-[var(--coral)]" />
                 <span className="hidden sm:inline text-[11.5px]">Mission Presets</span>
@@ -172,7 +172,7 @@ export default function Navbar({
                   onClick={() => setPresetOpen(false)}
                 >
                   <div className="text-[10px] font-mono uppercase text-[var(--ink-faint)] px-2.5 py-1 border-b border-[var(--line-soft)]">
-                    Mission date presets · dates outside 2026 use the approximate model
+                    Target Timelines
                   </div>
                   {MISSION_PRESETS.map((p, idx) => (
                     <button

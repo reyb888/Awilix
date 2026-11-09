@@ -4,9 +4,7 @@
 
 import { useState, useMemo } from 'react';
 import sites from '../data/sites.json';
-import { useScience } from './ScienceProvider.jsx';
-import ScenarioLab from './ScenarioLab.jsx';
-import { coordinateText } from '../lib/mascotKnowledge.js';
+import { computePath, powerWindow, commWindow } from '../lib/ephemeris.js';
 import {
   ResponsiveContainer,
   BarChart,
@@ -30,11 +28,9 @@ import {
   Compass
 } from 'lucide-react';
 
-export default function CompareView({ date, setTimeWindow, pins, onChangePins, onSelectSite, onVisitTerrain }) {
-  const science=useScience();
-  const timeRange=science.hours;
+export default function CompareView({ date, onSelectSite, onVisitTerrain }) {
   const [selectedIds, setSelectedIds] = useState(sites.map((s) => s.id));
-
+  const [timeRange, setTimeRange] = useState(24);
 
   // Toggle individual site
   const toggleSite = (id) => {
@@ -53,15 +49,20 @@ export default function CompareView({ date, setTimeWindow, pins, onChangePins, o
 
   // Compute ephemeris metrics for selected sites
   const comparisonData = useMemo(() => {
+    const startTime = new Date(`${date}T00:00:00Z`);
+    const step = timeRange === 24 ? 60 : 180;
+
     return sites
-      .filter((s) => selectedIds.includes(s.id) && science.byId[s.id])
+      .filter((s) => selectedIds.includes(s.id))
       .map((site) => {
-        const {power,comm}=science.byId[site.id];
+        const path = computePath(site.lat, site.lon, startTime, timeRange, step);
+        const power = powerWindow(path);
+        const comm = commWindow(path);
 
         return {
           id: site.id,
           name: site.name,
-          shortName: ({'shackleton-rim':'Shack. Rim','shackleton-ridge':'Shack. Ridge','mons-mouton':'Mouton','south-pole':'S. Pole','reiner-gamma':'Reiner','mare-crisium':'Crisium','malapert-a':'Malapert','nobile':'Nobile'})[site.id],
+          shortName: site.name.split(' ')[0],
           lat: site.lat,
           lon: site.lon,
           mission: site.mission,
@@ -75,7 +76,7 @@ export default function CompareView({ date, setTimeWindow, pins, onChangePins, o
           earthAvgAlt: comm.avgAlt,
         };
       });
-  }, [selectedIds, science.byId]);
+  }, [selectedIds, date, timeRange]);
 
   // Leaders
   const maxSun = useMemo(() => {
@@ -103,7 +104,7 @@ export default function CompareView({ date, setTimeWindow, pins, onChangePins, o
 
           <div className="flex items-center bg-[var(--paper-dark)] p-0.5 rounded-lg border border-[var(--line-soft)]">
             <button
-              onClick={() => setTimeWindow('24h')}
+              onClick={() => setTimeRange(24)}
               className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
                 timeRange === 24
                   ? 'bg-[var(--coral)] text-[#120e07] font-semibold'
@@ -113,7 +114,7 @@ export default function CompareView({ date, setTimeWindow, pins, onChangePins, o
               24h Window
             </button>
             <button
-              onClick={() => setTimeWindow('7d')}
+              onClick={() => setTimeRange(168)}
               className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
                 timeRange === 168
                   ? 'bg-[var(--coral)] text-[#120e07] font-semibold'
@@ -146,14 +147,12 @@ export default function CompareView({ date, setTimeWindow, pins, onChangePins, o
                 }`}
               >
                 {isChecked ? <CheckSquare className="w-3.5 h-3.5 text-[var(--coral)]" /> : <Square className="w-3.5 h-3.5" />}
-                <span>{s.id==='shackleton-rim'?'Shackleton Rim':s.id==='shackleton-ridge'?'Shackleton Ridge':s.name.split(' ')[0]}</span>
+                <span>{s.name.split(' ')[0]}</span>
               </button>
             );
           })}
         </div>
       </div>
-
-      <ScenarioLab pins={pins} setPins={onChangePins}/>
 
       {/* ── Top Leaderboard Cards ──────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -193,19 +192,19 @@ export default function CompareView({ date, setTimeWindow, pins, onChangePins, o
           </div>
           <div className="text-right font-mono">
             <div className="text-2xl font-extrabold text-[var(--mustard)]">{maxComm?.commHours}h</div>
-            <div className="text-[11px] text-[var(--ink-mute)]">{maxComm?.commPercent}% visible</div>
+            <div className="text-[11px] text-[var(--ink-mute)]">{maxComm?.commPercent}% Uptime</div>
           </div>
         </div>
       </div>
 
       {/* ── Comparative Bar Chart ──────────────────────── */}
-      <div className="bento-plate p-5 space-y-4" data-guide="comparison-chart">
+      <div className="bento-plate p-5 space-y-4">
         <div>
           <h3 className="text-base font-bold text-[var(--ink)] font-sans">
             Solar Daylight vs Direct-to-Earth Window Comparison
           </h3>
           <p className="text-xs text-[var(--ink-mute)] font-sans">
-            Hours visible in the shared visibility model for {date} ({timeRange}h analysis window)
+            Hours above the local horizon for {date} ({timeRange}h analysis window)
           </p>
         </div>
 
@@ -213,21 +212,21 @@ export default function CompareView({ date, setTimeWindow, pins, onChangePins, o
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={comparisonData} margin={{ top: 10, right: 10, left: -10, bottom: 25 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(238, 241, 247, 0.08)" />
-              <XAxis dataKey="shortName" stroke="#93a1ab" fontSize={11} interval={0} angle={-15} textAnchor="end" />
-              <YAxis stroke="#93a1ab" fontSize={11} unit="h" />
+              <XAxis dataKey="shortName" stroke="#667085" fontSize={11} interval={0} angle={-15} textAnchor="end" />
+              <YAxis stroke="#667085" fontSize={11} unit="h" />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#111820',
+                  backgroundColor: '#0a0e17',
                   borderColor: 'rgba(238, 241, 247, 0.16)',
                   borderRadius: '10px',
                   fontSize: '11px',
-                  color: '#eeeae1',
+                  color: '#eef1f7',
                 }}
-                formatter={(val, name) => [`${val} hours`, name]}
+                formatter={(val, name) => [`${val} hours`, name === 'powerHours' ? 'Sunlight' : 'DTE Comm']}
               />
               <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-              <Bar dataKey="powerHours" name="Sunlight Hours" fill="#eac18b" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="commHours" name="DTE Comm Hours" fill="#91c6d4" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="powerHours" name="Sunlight Hours" fill="#ffab5e" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="commHours" name="DTE Comm Hours" fill="#8fd3e8" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -260,7 +259,7 @@ export default function CompareView({ date, setTimeWindow, pins, onChangePins, o
                     {s.name}
                   </td>
                   <td className="py-3 px-4 text-[var(--ink-mute)]">
-                    {coordinateText(s)}
+                    {s.lat}°, {s.lon}°
                   </td>
                   <td className="py-3 px-4 text-[var(--ink-soft)] font-sans">
                     <div>{s.mission}</div>
@@ -276,7 +275,7 @@ export default function CompareView({ date, setTimeWindow, pins, onChangePins, o
                     {s.elevationReliefM.toLocaleString()} m
                   </td>
                   <td className="py-3 px-4 text-[var(--ink-faint)] text-[11px] truncate max-w-[140px]">
-                    {s.surfaceSlopeClass || 'Not cataloged'}
+                    {s.surfaceSlopeClass}
                   </td>
                   <td className="py-3 px-4">
                     <button

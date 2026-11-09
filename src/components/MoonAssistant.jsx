@@ -1,13 +1,12 @@
 // src/components/MoonAssistant.jsx
-// AI-powered educational chatbot using Local scenario tools
+// AI-powered educational chatbot using Gemini 2.0 Flash
 // Architectural Blue & Silver Theme · Embedded and Floating Modes
 
 import { useState, useRef, useEffect } from 'react';
-import {answerGuideQuestion} from '../lib/projectGuideTools.js';
 import { Bot, Send, X, Sparkles, Trash2, MessageCircle } from 'lucide-react';
 
 const SUGGESTED_QUESTIONS = [
-  "What if landing is delayed by 3 days?",
+  "Why is the Moon's south pole the prime target for Artemis?",
   "What is a permanently shadowed region (PSR)?",
   "How does solar power work when the Sun skims the lunar horizon?",
   "What is Direct-to-Earth communication and how does libration affect it?",
@@ -16,7 +15,7 @@ const SUGGESTED_QUESTIONS = [
   "How does lunar topography affect solar panel incidence angles?",
 ];
 
-export default function MoonAssistant({ site, date, power, comm, embedded = false, scenario, timeWindow, onNavigate, onComparePins }) {
+export default function MoonAssistant({ site, date, power, comm, embedded = false }) {
   const [isOpen, setIsOpen] = useState(embedded);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -28,22 +27,64 @@ export default function MoonAssistant({ site, date, power, comm, embedded = fals
   }, [messages]);
 
   const sendMessage = async (text) => {
-    if(loading)return;
-    const userMsg = (text || input).trim().slice(0,1200);
+    const userMsg = (text || input).trim();
     if (!userMsg) return;
     setInput('');
     setMessages((prev) => [...prev, { role: 'user', text: userMsg }]);
     setLoading(true);
 
-    try {
-      const reply=await answerGuideQuestion(userMsg,{site,date,power,comm,scenario,timeWindow,activeTab:'assistant'});
-      setMessages(prev=>[...prev,{role:'assistant',text:reply.text}]);
-      if(reply.pins)onComparePins?.(reply.pins);
-      if(reply.navigateTo)onNavigate?.(reply.navigateTo);
-    } catch {
-      setMessages(prev=>[...prev,{role:'assistant',text:'The local analysis could not complete. Try a shorter window or wait for the current scenario to finish loading.'}]);
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: '🔑 **Gemini API Key Required**\n\nThe Moon Assistant uses Gemini 2.0 Flash for interactive Q&A.\n\n1. Generate a key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)\n2. Add to `.env`: `VITE_GEMINI_API_KEY=your_key_here`\n3. Restart the dev server\n\nAll real scientific telemetry, LDEM terrain models, and ephemeris algorithms remain fully operational without an API key!',
+        },
+      ]);
+      setLoading(false);
+      return;
     }
 
+    const systemPrompt = `You are Awilix, an authoritative, scientifically rigorous AI specialist in lunar south pole exploration, ephemeris orbital geometry, and the NASA 2026 Space Apps Challenge.
+Keep answers concise, elegant, and informative.
+Current site context:
+- Site: ${site?.name || 'South Pole'} at ${site?.lat || -89.9}°S, ${site?.lon || 0.0}°E
+- Mission: ${site?.mission || 'CLPS / Artemis'}
+- Date: ${date}
+- Sunlight window: ${power?.hours || 0}h (avg alt ${power?.avgAlt?.toFixed(1) || 0}°)
+- Direct-to-Earth window: ${comm?.hours || 0}h (uptime ${comm?.availabilityPercent || 0}%)
+- Terrain relief: ${site?.elevationReliefM || 4000} m
+- Scientific purpose: ${site?.whyNASAChose || ''}
+Always cite NASA primary sources (LDEM, LOLA, DE421, LRO) when appropriate.`;
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              ...messages.map((m) => ({
+                role: m.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: m.text }],
+              })),
+              { role: 'user', parts: [{ text: systemPrompt + '\n\nUser question: ' + userMsg }] },
+            ],
+            generationConfig: {
+              temperature: 0.65,
+              maxOutputTokens: 800,
+            },
+          }),
+        }
+      );
+      const data = await response.json();
+      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Unable to retrieve answer.';
+      setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
+    } catch (e) {
+      setMessages((prev) => [...prev, { role: 'assistant', text: 'Error connecting to Gemini: ' + e.message }]);
+    }
     setLoading(false);
   };
 
@@ -61,11 +102,11 @@ export default function MoonAssistant({ site, date, power, comm, embedded = fals
               <div className="flex items-center gap-2">
                 <h2 className="font-bold text-[var(--ink)] font-sans">Awilix Mission Assistant</h2>
                 <span className="telemetry-chip terrain text-[10px] py-0.5 px-2">
-                  Local scenario tools
+                  Gemini 2.0 Flash
                 </span>
               </div>
               <p className="text-xs text-[var(--ink-mute)] font-sans">
-                Project knowledge and local calculations · no cloud model connected
+                Interactive educational guide for lunar south pole exploration
               </p>
             </div>
           </div>
@@ -158,16 +199,13 @@ export default function MoonAssistant({ site, date, power, comm, embedded = fals
           <div className="flex gap-2">
             <input
               type="text"
-              aria-label="Ask mission assistant"
-              maxLength={1200}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-              placeholder="Ask about the project or a landing delay…"
+              placeholder="Ask anything about lunar ephemeris, topography, or landing sites..."
               className="flex-1 bg-[var(--bone)] border border-[var(--line)] rounded-xl px-4 py-2.5 text-xs text-[var(--ink)] placeholder-[var(--ink-faint)] focus:outline-none focus:border-[var(--coral)]"
             />
             <button
-              aria-label="Send mission question"
               onClick={() => sendMessage()}
               disabled={!input.trim() || loading}
               className="btn-primary text-xs py-2 px-4 disabled:opacity-40"
@@ -252,8 +290,6 @@ export default function MoonAssistant({ site, date, power, comm, embedded = fals
           <div className="p-3 border-t border-[var(--line-soft)] bg-[var(--paper-dark)] flex gap-2">
             <input
               type="text"
-              aria-label="Ask mission assistant"
-              maxLength={1200}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
@@ -261,7 +297,6 @@ export default function MoonAssistant({ site, date, power, comm, embedded = fals
               className="flex-1 bg-[var(--bone)] border border-[var(--line)] rounded-lg px-3 py-2 text-xs text-[var(--ink)] focus:outline-none focus:border-[var(--coral)]"
             />
             <button
-              aria-label="Send mission question"
               onClick={() => sendMessage()}
               disabled={!input.trim() || loading}
               className="btn-primary text-xs py-1.5 px-3"

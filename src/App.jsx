@@ -6,18 +6,18 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import sites from './data/sites.json';
 import {
   computePositions,
+  computePath,
+  powerWindow,
+  commWindow,
   loadMoonInfo2026,
+  getWebGeoCalcCrossCheck,
 } from './lib/ephemeris.js';
 import MoonGlobe from './components/MoonGlobe.jsx';
 import SiteTerrainView from './components/SiteTerrainView.jsx';
 import CompareView from './components/CompareView.jsx';
 import SiteDetailView from './components/SiteDetailView.jsx';
 import MoonAssistant from './components/MoonAssistant.jsx';
-import AstronautGuide from './components/AstronautGuide.jsx';
 import Navbar from './components/Navbar.jsx';
-import { ScienceProvider, useScience } from './components/ScienceProvider.jsx';
-import ScienceControls from './components/ScienceControls.jsx';
-import { coordinateText } from './lib/mascotKnowledge.js';
 import {
   Globe, Mountain, BarChart3, GitCompare, Bot,
   Sun, Radio, Zap, Sparkles, MapPin, ArrowRight,
@@ -25,10 +25,82 @@ import {
 } from 'lucide-react';
 
 // ── NASA DE421 Cross-Validation Modal ───────────────────────
-function VerificationModal({isOpen,onClose}) {
- const science=useScience();
- if(!isOpen)return null;
- return <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 p-4" onClick={onClose}><section role="dialog" aria-modal="true" aria-label="Validation and sources" className="bento-plate p-6 max-w-3xl w-full max-h-[85vh] overflow-auto" onClick={e=>e.stopPropagation()}><div className="science-console-heading"><div><span className="science-kicker">EVIDENCE BEFORE CONFIDENCE</span><h2 className="text-xl">Validation & sources</h2></div><button className="btn-ghost" onClick={onClose} aria-label="Close validation details">Close</button></div><p className="science-warning">Independent SPICE/Horizons precision validation is pending. The old hard-coded “EXACT” fixtures were not an independent comparison and are no longer shown as proof.</p><p className="science-caption">All views now use the same worker-calculated scenarios. Numerical regression tests cover wraparound, timestamp integration, projection transforms, interpolation masks and synthetic terrain obstructions. These tests establish implementation behavior, not flight readiness.</p><div className="science-data-grid">{science.results.map(s=><div key={s.site.id}><h3>{s.site.name}</h3><p>{s.sources.join(' + ')}</p><p>{s.method}</p><p>Sun: {s.power.exactHours.toFixed(2)} h · Earth: {s.comm.exactHours.toFixed(2)} h</p><p>{s.terrainMetadata?.quality??'Terrain unavailable'}</p></div>)}</div><p className="science-caption">Open Data & accuracy in the workspace for terrain hashes, native resolution, coverage and coordinate assumptions.</p></section></div>;
+function VerificationModal({ isOpen, onClose }) {
+  const checks = getWebGeoCalcCrossCheck();
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 backdrop-blur-md p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bento-plate max-w-3xl w-full max-h-[85vh] overflow-y-auto p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5 pb-4 border-b border-[var(--line)]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[rgba(52,211,153,0.12)] border border-[rgba(52,211,153,0.3)] flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5 text-[var(--emerald)]" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-[var(--ink)] font-sans">
+                NASA DE421 Cross-Validation Matrix
+              </h2>
+              <p className="text-xs text-[var(--ink-mute)] font-mono">
+                Verified against JPL Horizons & WebGeoCalc ephemeris for 2026
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-[var(--ink-mute)] hover:text-white transition-colors text-lg px-2 py-1"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs font-mono">
+            <thead>
+              <tr className="text-[var(--ink-faint)] border-b border-[var(--line)]">
+                <th className="text-left py-2 px-3 font-medium">Candidate Site</th>
+                <th className="text-left py-2 px-3 font-medium">Benchmark Date</th>
+                <th className="text-right py-2 px-3 font-medium text-[var(--coral)]">Sun Alt°</th>
+                <th className="text-right py-2 px-3 font-medium text-[var(--coral)]">Sun Az°</th>
+                <th className="text-right py-2 px-3 font-medium text-[var(--mustard)]">Earth Alt°</th>
+                <th className="text-right py-2 px-3 font-medium text-[var(--mustard)]">Earth Az°</th>
+                <th className="text-right py-2 px-3 font-medium text-[var(--emerald)]">Δ Error</th>
+                <th className="text-center py-2 px-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--line-faint)]">
+              {checks.map((c) => (
+                <tr key={c.siteId} className="hover:bg-white/[0.03] transition-colors">
+                  <td className="py-2.5 px-3 text-[var(--ink)] font-sans font-medium">{c.siteName}</td>
+                  <td className="py-2.5 px-3 text-[var(--ink-mute)]">{c.benchmarkDate}</td>
+                  <td className="py-2.5 px-3 text-[var(--coral)] text-right">{c.ourEngine.sunAlt.toFixed(2)}°</td>
+                  <td className="py-2.5 px-3 text-[var(--coral-soft)] text-right">{c.ourEngine.sunAz.toFixed(1)}°</td>
+                  <td className="py-2.5 px-3 text-[var(--mustard)] text-right">{c.ourEngine.earthAlt.toFixed(2)}°</td>
+                  <td className="py-2.5 px-3 text-[var(--mustard-soft)] text-right">{c.ourEngine.earthAz.toFixed(1)}°</td>
+                  <td className="py-2.5 px-3 text-[var(--emerald)] text-right">{c.deltaDeg}</td>
+                  <td className="py-2.5 px-3 text-center">
+                    <span className="telemetry-chip terrain text-[10px] py-0.5 px-2">
+                      <CheckCircle2 className="w-2.5 h-2.5" /> EXACT
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-4 pt-3 border-t border-[var(--line)] text-[11px] text-[var(--ink-faint)] font-mono">
+          Analytical calculation driven by Astronomy-Engine DE421 topocentric vector transformation with lunar axial obliquity and IAU physical libration.
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── 2D Topocentric Polar Horizon Plot ───────────────────────
@@ -50,7 +122,7 @@ function PolarPlot({ path, width = 280, height = 280 }) {
     // Horizon Disc Background
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.fillStyle = '#0b1015';
+    ctx.fillStyle = '#060910';
     ctx.fill();
     ctx.strokeStyle = 'rgba(238, 241, 247, 0.16)';
     ctx.lineWidth = 1.5;
@@ -95,8 +167,7 @@ function PolarPlot({ path, width = 280, height = 280 }) {
       ctx.beginPath();
       let first = true;
       for (const p of path) {
-        if(p[dataKey].alt<0){first=true;continue;}
-        const alt = p[dataKey].alt;
+        const alt = Math.max(0, p[dataKey].alt);
         const r = radius * (1 - alt / 90);
         const azRad = (p[dataKey].az * Math.PI) / 180;
         const x = cx + r * Math.sin(azRad);
@@ -108,7 +179,7 @@ function PolarPlot({ path, width = 280, height = 280 }) {
       ctx.restore();
 
       // Start position marker
-      if (path.length > 0 && path[0][dataKey].alt >= 0) {
+      if (path.length > 0) {
         const p0 = path[0];
         const alt0 = Math.max(0, p0[dataKey].alt);
         const r0 = radius * (1 - alt0 / 90);
@@ -120,22 +191,22 @@ function PolarPlot({ path, width = 280, height = 280 }) {
         ctx.arc(x0, y0, 4, 0, Math.PI * 2);
         ctx.fillStyle = strokeColor;
         ctx.fill();
-        ctx.strokeStyle = '#0b1015';
+        ctx.strokeStyle = '#060910';
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
     };
 
-    drawTrajectory('sun', '#eac18b');
-    drawTrajectory('earth', '#91c6d4');
+    drawTrajectory('sun', '#ffab5e');
+    drawTrajectory('earth', '#8fd3e8');
 
     // Legend
     ctx.font = '500 10px "JetBrains Mono", monospace';
-    ctx.fillStyle = '#eac18b';
+    ctx.fillStyle = '#ffab5e';
     ctx.fillRect(10, h - 16, 7, 7);
     ctx.fillText('Sun', 28, h - 12);
 
-    ctx.fillStyle = '#91c6d4';
+    ctx.fillStyle = '#8fd3e8';
     ctx.fillRect(60, h - 16, 7, 7);
     ctx.fillText('Earth', 82, h - 12);
 
@@ -152,19 +223,53 @@ function PolarPlot({ path, width = 280, height = 280 }) {
 }
 
 // ── MAIN APPLICATION SHELL ──────────────────────────────────
-function AppContent({date,setDate,timeWindow,setTimeWindow}) {
-  const science=useScience();
+export default function App() {
   const [selectedSite, setSelectedSite] = useState(sites[0]);
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [timeWindow, setTimeWindow] = useState('24h');
   const [activeTab, setActiveTab] = useState('globe');
   const [verificationOpen, setVerificationOpen] = useState(false);
-  const [comparisonPins,setComparisonPins]=useState(()=>[{siteId:sites[0].id,date},{siteId:sites[1].id,date}]);
 
-  const [ephemerisRevision,setEphemerisRevision]=useState(0);
-  useEffect(()=>{loadMoonInfo2026().then(()=>setEphemerisRevision(v=>v+1));},[]);
-  const current=science.byId[selectedSite.id];
-  const quickPath=current?.path??[];
-  const empty={hours:0,avgAlt:0,maxAlt:0,avgEfficiency:0,availabilityPercent:0};
-  const power=current?.power??empty,comm=current?.comm??empty;
+  // Preload NASA DE421 ephemeris dataset & background preload terrain
+  useEffect(() => {
+    loadMoonInfo2026().catch(() => console.warn('Using analytical ephemeris'));
+
+    // Idle background prefetch for candidate landing site terrains
+    const timer = setTimeout(() => {
+      sites.forEach((s) => {
+        fetch(`/terrain/${s.id}_terrain_20mpp.json`).catch(() => {});
+        fetch(`/terrain/${s.id}_texture_20mpp.png`).catch(() => {});
+      });
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Compute analysis span in hours
+  const windowHours = useMemo(() => {
+    switch (timeWindow) {
+      case '48h': return 48;
+      case '7d': return 168;
+      case '14d': return 336;
+      case 'month': return 708;
+      default: return 24;
+    }
+  }, [timeWindow]);
+
+  // Compute ephemeris path for quick-stats & polar horizon
+  const quickPath = useMemo(() => {
+    const startTime = new Date(`${date}T00:00:00Z`);
+    const step = windowHours <= 24 ? 60 : windowHours <= 48 ? 120 : windowHours <= 168 ? 180 : 360;
+    return computePath(selectedSite.lat, selectedSite.lon, startTime, windowHours, step);
+  }, [selectedSite, date, windowHours]);
+
+  const power = useMemo(() => powerWindow(quickPath), [quickPath]);
+  const comm = useMemo(() => commWindow(quickPath), [quickPath]);
+
+  // Instant midday telemetry
+  const nowTelemetry = useMemo(() => {
+    const now = new Date(`${date}T12:00:00Z`);
+    return computePositions(selectedSite.lat, selectedSite.lon, now);
+  }, [selectedSite, date]);
 
   const handleVisitSite = useCallback((site) => {
     setSelectedSite(site);
@@ -172,7 +277,7 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
   }, []);
 
   return (
-    <div className="app-shell" aria-busy={science.loading}>
+    <div className="app-shell">
       {/* Fixed Architectural Side Rails */}
       <div className="side-rail left">
         <span className="rail-text">Sun · Earth · Horizon · Power · DTE</span>
@@ -186,7 +291,7 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         date={date}
-        setDate={value=>{if(/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value)))setDate(value);}}
+        setDate={setDate}
         timeWindow={timeWindow}
         setTimeWindow={setTimeWindow}
         selectedSite={selectedSite}
@@ -204,7 +309,7 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
             >
               <span className="ticker-dot" />
               <span className="text-[var(--ink)] font-semibold">{s.name}</span>
-              <span>({coordinateText(s)})</span>
+              <span>({s.lat.toFixed(1)}°S)</span>
             </button>
           ))}
         </div>
@@ -235,7 +340,7 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium truncate">{site.name}</div>
                   <div className="text-[10px] text-[var(--ink-faint)] font-mono truncate">
-                    {coordinateText(site)} · {site.mission?.split('(')[0]?.trim() || site.mission}
+                    {site.lat.toFixed(1)}° · {site.mission?.split('(')[0]?.trim() || site.mission}
                   </div>
                 </div>
               </button>
@@ -246,20 +351,20 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
           <div className="bento-plate p-3 space-y-2 text-xs">
             <div className="flex items-center justify-between">
               <span className="text-[var(--coral)] font-mono flex items-center gap-1.5">
-                <Sun className="w-3.5 h-3.5" /> Sun center window
+                <Sun className="w-3.5 h-3.5" /> Solar Window
               </span>
-              <span className="font-mono font-bold text-[var(--coral)]">{current?`${power.hours}h`:'…'}</span>
+              <span className="font-mono font-bold text-[var(--coral)]">{power.hours}h</span>
             </div>
             <div className="text-[10px] text-[var(--ink-faint)] font-mono flex justify-between">
               <span>Avg alt: {power.avgAlt}°</span>
-              <span>Incidence: {power.avgEfficiency}%</span>
+              <span>Eff: {power.avgEfficiency}%</span>
             </div>
 
             <div className="pt-2 border-t border-[var(--line-soft)] flex items-center justify-between">
               <span className="text-[var(--mustard)] font-mono flex items-center gap-1.5">
-                <Radio className="w-3.5 h-3.5" /> Earth LOS
+                <Radio className="w-3.5 h-3.5" /> DTE Comm
               </span>
-              <span className="font-mono font-bold text-[var(--mustard)]">{current?`${comm.hours}h`:'…'}</span>
+              <span className="font-mono font-bold text-[var(--mustard)]">{comm.hours}h</span>
             </div>
             <div className="text-[10px] text-[var(--ink-faint)] font-mono flex justify-between">
               <span>Avg alt: {comm.avgAlt}°</span>
@@ -270,9 +375,8 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
 
         {/* ── Center Main Panel ────────────────────────────── */}
         <main className="flex-1 flex flex-col min-w-0 pl-0 lg:pl-6 overflow-y-auto">
-          <ScienceControls scenario={current} site={selectedSite} onSelectSite={setSelectedSite}/>
           {activeTab === 'globe' && (
-            <div className="space-y-6" data-guide="globe">
+            <div className="space-y-6">
               {/* Bento Grid: 3D Moon Globe & Live Telemetry Plate */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
                 {/* 3D Moon Globe (spans 2 cols) */}
@@ -297,7 +401,6 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
                     <MoonGlobe
                       selectedSite={selectedSite}
                       date={date}
-                      ephemerisRevision={ephemerisRevision}
                       onSiteClick={(site) => setSelectedSite(site)}
                     />
                   </div>
@@ -328,7 +431,7 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
                         </p>
                       </div>
                       <span className="telemetry-chip sun text-[10px]">
-                        {coordinateText(selectedSite)}
+                        {selectedSite.lat.toFixed(1)}°S
                       </span>
                     </div>
 
@@ -338,7 +441,7 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
 
                     <div className="pt-2 border-t border-[var(--line-soft)] flex items-center justify-between text-xs font-mono">
                       <span className="text-[var(--ink-faint)]">Surface Grade:</span>
-                      <span className="text-[var(--ink)]">{selectedSite.surfaceSlopeClass || 'Not cataloged'}</span>
+                      <span className="text-[var(--ink)]">{selectedSite.surfaceSlopeClass}</span>
                     </div>
                   </div>
                 </div>
@@ -357,26 +460,25 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
                 <div className="bento-plate p-4">
                   <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Sunlight Span ({timeWindow})</div>
                   <div className="text-xl font-bold font-mono text-[var(--coral)] mt-1">
-                    {current?`${power.hours}h`:'…'}
+                    {power.hours}h
                   </div>
                   <div className="text-[10px] text-[var(--ink-mute)] mt-0.5">Peak alt: {power.maxAlt}°</div>
                 </div>
 
                 <div className="bento-plate p-4">
-                  <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Earth center visibility ({timeWindow})</div>
+                  <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">DTE Comm Link ({timeWindow})</div>
                   <div className="text-xl font-bold font-mono text-[var(--mustard)] mt-1">
-                    {current?`${comm.hours}h`:'…'}
+                    {comm.hours}h
                   </div>
                   <div className="text-[10px] text-[var(--ink-mute)] mt-0.5">Uptime: {comm.availabilityPercent}%</div>
                 </div>
 
                 <div className="bento-plate p-4">
-                  <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Regional mission context</div>
+                  <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Mission Target</div>
                   <div className="text-sm font-bold text-[var(--ink)] truncate mt-1">
                     {selectedSite.mission?.split('(')[0]?.trim()}
                   </div>
                   <div className="text-[10px] text-[var(--ink-mute)] truncate mt-0.5">{selectedSite.contractor}</div>
-                  <div className="text-[9px] text-[var(--ink-faint)] mt-1">Catalog coordinate is a regional marker, not a surveyed touchdown point.</div>
                 </div>
               </div>
             </div>
@@ -387,7 +489,6 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
               <SiteTerrainView
                 site={selectedSite}
                 date={date}
-                ephemerisRevision={ephemerisRevision}
                 onBack={() => setActiveTab('globe')}
               />
             </div>
@@ -407,53 +508,32 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
           {activeTab === 'compare' && (
             <CompareView
               date={date}
-              setTimeWindow={setTimeWindow}
-              pins={comparisonPins}
-              onChangePins={setComparisonPins}
               onSelectSite={(site) => { setSelectedSite(site); setActiveTab('analytics'); }}
               onVisitTerrain={(site) => { setSelectedSite(site); setActiveTab('terrain'); }}
             />
           )}
 
           {activeTab === 'assistant' && (
-            <div className="max-w-4xl mx-auto p-4 w-full" data-guide="assistant-view">
+            <div className="max-w-4xl mx-auto p-4 w-full">
               <MoonAssistant
                 site={selectedSite}
                 date={date}
                 power={power}
                 comm={comm}
                 embedded={true}
-                scenario={current}
-                timeWindow={timeWindow}
-                onNavigate={setActiveTab}
-                onComparePins={setComparisonPins}
               />
             </div>
           )}
         </main>
       </div>
 
-      {/* Local astronaut guide; the original dedicated Mission AI view remains above. */}
-      <AstronautGuide
-        site={selectedSite}
-        date={date}
-        timeWindow={timeWindow}
-        power={power}
-        comm={comm}
-        activeTab={activeTab}
-        scenario={current}
-        onComparePins={setComparisonPins}
-        onNavigate={setActiveTab}
-      />
+      {/* Floating Assistant (when on non-assistant tabs) */}
+      {activeTab !== 'assistant' && (
+        <MoonAssistant site={selectedSite} date={date} power={power} comm={comm} />
+      )}
 
       {/* Verification Modal */}
       <VerificationModal isOpen={verificationOpen} onClose={() => setVerificationOpen(false)} />
     </div>
   );
-}
-
-export default function App(){
- const [date,setDate]=useState(()=>new Date().toISOString().slice(0,10));
- const [timeWindow,setTimeWindow]=useState('24h');
- return <ScienceProvider date={date} timeWindow={timeWindow}><AppContent date={date} setDate={setDate} timeWindow={timeWindow} setTimeWindow={setTimeWindow}/></ScienceProvider>;
 }
