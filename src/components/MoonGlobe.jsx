@@ -13,8 +13,8 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import * as Astronomy from 'astronomy-engine';
 import sites from '../data/sites.json';
+import {getSubPoints,computePositions} from '../lib/ephemeris.js';
 import { Eye, Compass, Layers, Radio, Sun, Sparkles, Navigation, Maximize2, Info, ChevronDown } from 'lucide-react';
 
 // NASA Physical Dimensions
@@ -33,7 +33,7 @@ const NASA = {
   SUN_VOL_RATIO: 64300000.0, // (400.8)^3
 };
 
-export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
+export default function MoonGlobe({ selectedSite, date, onSiteClick, ephemerisRevision }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -124,7 +124,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
 
     // SCENE
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x04060c);
+    scene.background = new THREE.Color(0x0b121a);
     sceneRef.current = scene;
 
     // CAMERA (with Logarithmic Depth Buffer support for astronomical distances up to 1,000,000 units)
@@ -451,21 +451,11 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     const hourStr = String(currentHour).padStart(2, '0');
     const time = new Date(`${date}T${hourStr}:00:00Z`);
 
-    // Astronomical Vectors via Astronomy-Engine
-    const moonVec = Astronomy.GeoVector(Astronomy.Body.Moon, time, true);
-    const sunVec = Astronomy.GeoVector(Astronomy.Body.Sun, time, true);
-
-    const dSun = {
-      x: sunVec.x - moonVec.x,
-      y: sunVec.y - moonVec.y,
-      z: sunVec.z - moonVec.z,
-    };
-    const sunMag = Math.hypot(dSun.x, dSun.y, dSun.z);
-    const sunDir = new THREE.Vector3(dSun.x / sunMag, dSun.y / sunMag, dSun.z / sunMag);
-
-    const dEarth = { x: -moonVec.x, y: -moonVec.y, z: -moonVec.z };
-    const earthMag = Math.hypot(dEarth.x, dEarth.y, dEarth.z);
-    const earthDir = new THREE.Vector3(dEarth.x / earthMag, dEarth.y / earthMag, dEarth.z / earthMag);
+    // Same lunar body-fixed directions as the numerical views and site markers.
+    const {subsolar,subearth}=getSubPoints(time);
+    const direction=p=>new THREE.Vector3(Math.cos(p.lat*Math.PI/180)*Math.sin(p.lon*Math.PI/180),Math.sin(p.lat*Math.PI/180),Math.cos(p.lat*Math.PI/180)*Math.cos(p.lon*Math.PI/180));
+    const sunDir=direction(subsolar),earthDir=direction(subearth);
+    const sunMag=subsolar.distKm,earthMag=subearth.distKm;
 
     // Calculate lunar perspective phase of Earth
     const sunMoonAngle = sunDir.angleTo(earthDir);
@@ -477,7 +467,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     });
 
     // 1. UPDATE EARTH MODEL SCALE & POSITION
-    const earthPos = earthDir.clone().multiplyScalar(scaleConfig.earthDist);
+    const earthPos = earthDir.clone().multiplyScalar(scaleMode==='true'?earthMag/NASA.MOON_R_KM:scaleConfig.earthDist);
     if (earthModelRef.current) {
       earthModelRef.current.position.copy(earthPos);
       const naturalDim = earthModelRef.current.userData?.naturalDim || 2.0;
@@ -487,7 +477,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
     }
 
     // 2. UPDATE SUN MODEL SCALE & POSITION
-    const sunPos = sunDir.clone().multiplyScalar(scaleConfig.sunDist);
+    const sunPos = sunDir.clone().multiplyScalar(scaleMode==='true'?sunMag/NASA.MOON_R_KM:scaleConfig.sunDist);
     if (sunModelRef.current) {
       sunModelRef.current.position.copy(sunPos);
       const naturalDim = sunModelRef.current.userData?.naturalDim || 2.0;
@@ -531,9 +521,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
           const sz = Math.cos(latRad) * Math.cos(lonRad);
           const siteVec = new THREE.Vector3(sx, sy, sz);
 
-          const upVec = siteVec.clone().normalize();
-          const dot = upVec.dot(earthDir);
-          const isVisible = dot > 0.0;
+          const isVisible = computePositions(site.lat,site.lon,time).earth.alt > 0;
 
           const color = isVisible ? 0x8fd3e8 : 0xef4444;
           const opacity = isVisible ? (site.id === selectedSiteId ? 0.95 : 0.45) : 0.18;
@@ -675,7 +663,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
         solarRaysGroupRef.current.add(new THREE.LineSegments(geom, mat));
       }
     }
-  }, [date, currentHour, vectorMode, selectedSiteId, scaleConfig]);
+  }, [date, currentHour, vectorMode, selectedSiteId, scaleConfig, scaleMode, ephemerisRevision]);
 
   useEffect(() => {
     updateEphemerisAndScale();
@@ -720,7 +708,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick }) {
   };
 
   return (
-    <div className="relative w-full h-full min-h-[520px] flex flex-col select-none">
+    <div className="moon-globe-view relative w-full h-full min-h-[520px] flex flex-col select-none">
       {/* 3D WebGL Canvas */}
       <div ref={containerRef} className="w-full flex-1 rounded-xl overflow-hidden cursor-grab active:cursor-grabbing" />
 

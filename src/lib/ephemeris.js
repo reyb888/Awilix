@@ -1,8 +1,8 @@
-// src/lib/ephemeris.js
-// High-precision lunar ephemeris computation engine.
-// Cross-validated with NASA JPL DE421 / WebGeoCalc ephemeris.
+// Lunar ephemeris explorer. Independent precision validation is pending.
+// NASA hourly directions are interpolated on the unit sphere; fallback is approximate.
 
 import * as Astronomy from 'astronomy-engine';
+import { interpolateDirection, panelIncidence, positiveWindow } from './scienceMath.js';
 
 export const MOON_RADIUS_KM = 1737.4;
 export const KM_PER_AU = 149597870.691;
@@ -12,6 +12,26 @@ const R2D = 180 / Math.PI;
 // In-memory cache for NASA SVS DE421 2026 hourly data
 let moonInfo2026Cache = null;
 let moonInfoLoadPromise = null;
+const analyticalCache=new Map();
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function expectedHourlyLabel(index){
+  const date=new Date(Date.UTC(2026,0,1,index));
+  return `${String(date.getUTCDate()).padStart(2,'0')} ${MONTHS[date.getUTCMonth()]} 2026 ${String(date.getUTCHours()).padStart(2,'0')}:00 UT`;
+}
+
+/** Validate record order, timestamps and coordinate ranges before interpolation. */
+export function validateMoonInfo2026(data){
+  if(!Array.isArray(data)||data.length!==8760)throw new Error('Expected 8760 hourly records for calendar year 2026');
+  for(let i=0;i<data.length;i++){
+    const p=data[i];
+    if(!p||p.time!==expectedHourlyLabel(i))throw new Error(`Invalid or out-of-order timestamp at ephemeris row ${i+1}`);
+    const directions=[p.subsolar,p.subearth];
+    if(directions.some(point=>!point||!Number.isFinite(point.lat)||!Number.isFinite(point.lon)||Math.abs(point.lat)>90||Math.abs(point.lon)>180))throw new Error(`Invalid lunar direction at ephemeris row ${i+1}`);
+    if(!Number.isFinite(p.distance)||p.distance<=MOON_RADIUS_KM||p.distance>500000||!Number.isFinite(p.phase)||p.phase<0||p.phase>360)throw new Error(`Invalid distance or phase at ephemeris row ${i+1}`);
+  }
+  return true;
+}
 
 /**
  * Preload and cache NASA SVS DE421 hourly ephemeris for 2026.
@@ -26,6 +46,7 @@ export async function loadMoonInfo2026() {
       return res.json();
     })
     .then((data) => {
+      validateMoonInfo2026(data);
       moonInfo2026Cache = data;
       return data;
     })
@@ -47,7 +68,8 @@ export async function loadMoonInfo2026() {
  * @param {number} tgtDistKm - Target distance from Moon center (km)
  * @returns {{alt: number, az: number, distanceKm: number}}
  */
-export function topocentricAltAz(obsLat, obsLon, tgtLat, tgtLon, tgtDistKm) {
+export function topocentricAltAz(obsLat, obsLon, tgtLat, tgtLon, tgtDistKm, observerHeightM = 0) {
+  const observerRadius = MOON_RADIUS_KM + observerHeightM / 1000;
   const oLat = obsLat * D2R;
   const oLon = obsLon * D2R;
   const tLat = tgtLat * D2R;
@@ -64,9 +86,9 @@ export function topocentricAltAz(obsLat, obsLon, tgtLat, tgtLon, tgtDistKm) {
   const Tz = Math.sin(tLat);
 
   // Topocentric vector from observer to target
-  const Vx = tgtDistKm * Tx - MOON_RADIUS_KM * Ox;
-  const Vy = tgtDistKm * Ty - MOON_RADIUS_KM * Oy;
-  const Vz = tgtDistKm * Tz - MOON_RADIUS_KM * Oz;
+  const Vx = tgtDistKm * Tx - observerRadius * Ox;
+  const Vy = tgtDistKm * Ty - observerRadius * Oy;
+  const Vz = tgtDistKm * Tz - observerRadius * Oz;
   const Vmag = Math.sqrt(Vx * Vx + Vy * Vy + Vz * Vz);
 
   // Local Up is outward normal along radial vector O
@@ -78,13 +100,7 @@ export function topocentricAltAz(obsLat, obsLon, tgtLat, tgtLon, tgtDistKm) {
   let Ey = Math.cos(oLon);
   let Ez = 0;
 
-  // Handle pole singularity
-  if (Math.abs(obsLat) > 89.99) {
-    Ex = 0;
-    Ey = obsLat < 0 ? 1 : -1;
-    Ez = 0;
-  }
-
+  // At the pole, longitude defines the chosen meridian for azimuth.
   // North = Up x East
   const Nx = Oy * Ez - Oz * Ey;
   const Ny = Oz * Ex - Ox * Ez;
@@ -112,25 +128,26 @@ export function getSubPoints(time) {
     const baseHour = Math.floor(hoursFromStart);
     const frac = hoursFromStart - baseHour;
 
-    if (baseHour >= 0 && baseHour < moonInfo2026Cache.length - 1) {
+    if (baseHour >= 0 && baseHour <= moonInfo2026Cache.length - 1 && (baseHour < moonInfo2026Cache.length - 1 || frac === 0)) {
       const p0 = moonInfo2026Cache[baseHour];
-      const p1 = moonInfo2026Cache[baseHour + 1];
+      const p1 = moonInfo2026Cache[Math.min(baseHour + 1, moonInfo2026Cache.length - 1)];
 
-      // Linear interpolation between consecutive hours
-      const subsolarLon = p0.subsolar.lon + (p1.subsolar.lon - p0.subsolar.lon) * frac;
-      const subsolarLat = p0.subsolar.lat + (p1.subsolar.lat - p0.subsolar.lat) * frac;
-      const subearthLon = p0.subearth.lon + (p1.subearth.lon - p0.subearth.lon) * frac;
-      const subearthLat = p0.subearth.lat + (p1.subearth.lat - p0.subearth.lat) * frac;
+      const solar = interpolateDirection(p0.subsolar, p1.subsolar, frac);
+      const earth = interpolateDirection(p0.subearth, p1.subearth, frac);
+      const subsolarLon = solar.lon, subsolarLat = solar.lat;
+      const subearthLon = earth.lon, subearthLat = earth.lat;
       const earthDist = p0.distance + (p1.distance - p0.distance) * frac;
 
       return {
-        source: 'NASA JPL DE421 (SVS 5587)',
+        source: 'NASA SVS 5587 · hourly directions (2026)',
         subsolar: { lon: subsolarLon, lat: subsolarLat, distKm: 149597870.7 },
         subearth: { lon: subearthLon, lat: subearthLat, distKm: earthDist },
         phase: p0.phase + (p1.phase - p0.phase) * frac,
       };
     }
   }
+
+  if(analyticalCache.has(+time))return analyticalCache.get(+time);
 
   // Analytic computation using Astronomy.Libration & geocentric vectors
   const lib = Astronomy.Libration(time);
@@ -165,37 +182,29 @@ export function getSubPoints(time) {
 
   const phase = Astronomy.MoonPhase(time);
 
-  return {
-    source: 'Astronomy-Engine (IAU Libration & Ephemeris)',
+  const result = {
+    source: 'Analytical fallback · approximate lunar orientation',
     subsolar: { lon: subsolarLon, lat: subsolarLat, distKm: sunDist },
     subearth: { lon: subearthLon, lat: subearthLat, distKm: earthDist },
     phase: phase,
   };
+  if(analyticalCache.size>=4096)analyticalCache.delete(analyticalCache.keys().next().value);
+  analyticalCache.set(+time,result);
+  return result;
 }
 
 /**
  * Compute Sun and Earth alt/az and telemetry for a specific site and time.
  */
-export function computePositions(lat, lon, time) {
+export function computePositions(lat, lon, time, options = {}) {
+  if(!Number.isFinite(lat)||Math.abs(lat)>90||!Number.isFinite(lon)||Math.abs(lon)>180||!Number.isFinite(+time))throw new RangeError('Invalid lunar coordinates or UTC time');
   const { subsolar, subearth, source, phase } = getSubPoints(time);
 
-  const sun = topocentricAltAz(lat, lon, subsolar.lat, subsolar.lon, subsolar.distKm);
-  const earth = topocentricAltAz(lat, lon, subearth.lat, subearth.lon, subearth.distKm);
+  const sun = topocentricAltAz(lat, lon, subsolar.lat, subsolar.lon, subsolar.distKm, options.observerHeightM ?? 0);
+  const earth = topocentricAltAz(lat, lon, subearth.lat, subearth.lon, subearth.distKm, options.observerHeightM ?? 0);
 
-  // Power potential: For south pole vertical panels, incidence is cos(alt) when alt > 0.
-  // For horizontal ground, incidence is sin(alt) = cos(90 - alt).
-  // South pole missions (like Artemis / VIPER) use vertical or tilted solar panels.
-  const isPolar = Math.abs(lat) >= 80;
-  let powerEfficiency = 0;
-  if (sun.alt > 0) {
-    if (isPolar) {
-      // Vertical panel facing Sun azimuth: cos(alt)
-      powerEfficiency = Math.cos(sun.alt * D2R);
-    } else {
-      // Horizontal or sun-tracking panel
-      powerEfficiency = Math.sin(sun.alt * D2R);
-    }
-  }
+  // One explicit panel geometry for every site: horizontal by default.
+  const powerEfficiency = sun.alt > 0 ? panelIncidence(sun.alt,sun.az,options.panelTiltDeg??0,options.panelAzimuthDeg??0) : 0;
 
   // DTE line-of-sight status
   const commActive = earth.alt > 0;
@@ -216,14 +225,15 @@ export function computePositions(lat, lon, time) {
 /**
  * Compute Sun and Earth paths over an extended time range (e.g. 24h, 168h, 708h).
  */
-export function computePath(lat, lon, startTime, hours = 24, stepMinutes = 60) {
+export function computePath(lat, lon, startTime, hours = 24, stepMinutes = 60, options = {}) {
+  if(!Number.isFinite(hours)||hours<=0||hours>744||!Number.isFinite(stepMinutes)||stepMinutes<=0)throw new RangeError('Invalid analysis duration or step');
   const path = [];
   const totalMinutes = hours * 60;
-  const steps = Math.floor(totalMinutes / stepMinutes);
+  const steps = Math.ceil(totalMinutes / stepMinutes);
 
   for (let i = 0; i <= steps; i++) {
-    const time = new Date(startTime.getTime() + i * stepMinutes * 60 * 1000);
-    const pos = computePositions(lat, lon, time);
+    const time = new Date(startTime.getTime() + Math.min(totalMinutes, i * stepMinutes) * 60 * 1000);
+    const pos = computePositions(lat, lon, time, options);
     path.push(pos);
   }
 
@@ -234,137 +244,9 @@ export function computePath(lat, lon, startTime, hours = 24, stepMinutes = 60) {
  * Compute Power Generation Window statistics.
  */
 export function powerWindow(path, threshold = 0) {
-  if (!path || path.length === 0) return { hours: 0, avgAlt: 0, maxAlt: 0, avgEfficiency: 0 };
-
-  const totalWindowHours = path.length > 1
-    ? (path[path.length - 1].time.getTime() - path[0].time.getTime()) / 3600000
-    : 24;
-
-  const sunlit = path.filter((p) => p.sun.alt > threshold);
-  const hours = Math.min(totalWindowHours, (sunlit.length / path.length) * totalWindowHours);
-
-  const avgAlt = sunlit.length > 0
-    ? sunlit.reduce((acc, p) => acc + p.sun.alt, 0) / sunlit.length
-    : 0;
-
-  const maxAlt = path.reduce((max, p) => Math.max(max, p.sun.alt), -90);
-
-  const avgEfficiency = sunlit.length > 0
-    ? (sunlit.reduce((acc, p) => acc + p.powerEfficiency, 0) / sunlit.length) * 100
-    : 0;
-
-  return {
-    hours: Math.round(hours * 10) / 10,
-    avgAlt: Math.round(avgAlt * 10) / 10,
-    maxAlt: Math.round(maxAlt * 10) / 10,
-    avgEfficiency: Math.round(avgEfficiency),
-  };
+  return positiveWindow(path ?? [],p=>p.sunMargin ?? p.sun.alt-threshold,p=>p.sun.alt);
 }
-
-/**
- * Compute Direct-To-Earth (DTE) communication window statistics.
- */
 export function commWindow(path, horizonElev = 0) {
-  if (!path || path.length === 0) return { hours: 0, avgAlt: 0, maxAlt: 0, availabilityPercent: 0 };
-
-  const totalWindowHours = path.length > 1
-    ? (path[path.length - 1].time.getTime() - path[0].time.getTime()) / 3600000
-    : 24;
-
-  const visible = path.filter((p) => p.earth.alt > horizonElev);
-  const hours = Math.min(totalWindowHours, (visible.length / path.length) * totalWindowHours);
-
-  const avgAlt = visible.length > 0
-    ? visible.reduce((acc, p) => acc + p.earth.alt, 0) / visible.length
-    : 0;
-
-  const maxAlt = path.reduce((max, p) => Math.max(max, p.earth.alt), -90);
-  const availabilityPercent = Math.min(100, Math.round((visible.length / path.length) * 100));
-
-  return {
-    hours: Math.round(hours * 10) / 10,
-    avgAlt: Math.round(avgAlt * 10) / 10,
-    maxAlt: Math.round(maxAlt * 10) / 10,
-    availabilityPercent,
-  };
+  return positiveWindow(path ?? [],p=>p.earthMargin ?? p.earth.alt-horizonElev,p=>p.earth.alt);
 }
 
-/**
- * Verification benchmark for all landing sites against NASA JPL DE421 / WebGeoCalc.
- */
-export function getWebGeoCalcCrossCheck() {
-  return [
-    {
-      siteId: 'shackleton-rim',
-      siteName: 'Shackleton Crater Rim',
-      benchmarkDate: '2026-02-15 12:00 UTC',
-      nasaWebGeoCalc: { sunAlt: 0.28, sunAz: 199.35, earthAlt: -4.21, earthAz: 355.56 },
-      ourEngine: { sunAlt: 0.28, sunAz: 199.35, earthAlt: -4.21, earthAz: 355.56 },
-      deltaDeg: '< 0.01°',
-      status: 'VERIFIED EXACT (NASA DE421)'
-    },
-    {
-      siteId: 'malapert-a',
-      siteName: 'Malapert A',
-      benchmarkDate: '2026-02-15 12:00 UTC',
-      nasaWebGeoCalc: { sunAlt: -3.35, sunAz: 201.39, earthAlt: -0.31, earthAz: 357.56 },
-      ourEngine: { sunAlt: -3.35, sunAz: 201.39, earthAlt: -0.31, earthAz: 357.56 },
-      deltaDeg: '< 0.01°',
-      status: 'VERIFIED EXACT (NASA DE421)'
-    },
-    {
-      siteId: 'mons-mouton',
-      siteName: 'Mons Mouton',
-      benchmarkDate: '2026-02-15 12:00 UTC',
-      nasaWebGeoCalc: { sunAlt: -5.05, sunAz: 170.31, earthAlt: 0.28, earthAz: 326.65 },
-      ourEngine: { sunAlt: -5.05, sunAz: 170.31, earthAlt: 0.28, earthAz: 326.65 },
-      deltaDeg: '< 0.01°',
-      status: 'VERIFIED EXACT (NASA DE421)'
-    },
-    {
-      siteId: 'nobile',
-      siteName: 'Nobile Crater',
-      benchmarkDate: '2026-02-15 12:00 UTC',
-      nasaWebGeoCalc: { sunAlt: -3.58, sunAz: 145.27, earthAlt: -1.79, earthAz: 301.76 },
-      ourEngine: { sunAlt: -3.58, sunAz: 145.27, earthAlt: -1.79, earthAz: 301.76 },
-      deltaDeg: '< 0.01°',
-      status: 'VERIFIED EXACT (NASA DE421)'
-    },
-    {
-      siteId: 'shackleton-ridge',
-      siteName: 'Shackleton Connecting Ridge',
-      benchmarkDate: '2026-02-15 12:00 UTC',
-      nasaWebGeoCalc: { sunAlt: -0.10, sunAz: 199.35, earthAlt: -3.81, earthAz: 355.56 },
-      ourEngine: { sunAlt: -0.10, sunAz: 199.35, earthAlt: -3.81, earthAz: 355.56 },
-      deltaDeg: '< 0.01°',
-      status: 'VERIFIED EXACT (NASA DE421)'
-    },
-    {
-      siteId: 'south-pole',
-      siteName: 'Geographic South Pole',
-      benchmarkDate: '2026-02-15 12:00 UTC',
-      nasaWebGeoCalc: { sunAlt: 0.37, sunAz: 199.35, earthAlt: -4.31, earthAz: 355.56 },
-      ourEngine: { sunAlt: 0.37, sunAz: 199.35, earthAlt: -4.31, earthAz: 355.56 },
-      deltaDeg: '< 0.01°',
-      status: 'VERIFIED EXACT (NASA DE421)'
-    },
-    {
-      siteId: 'reiner-gamma',
-      siteName: 'Reiner Gamma',
-      benchmarkDate: '2026-02-15 12:00 UTC',
-      nasaWebGeoCalc: { sunAlt: -11.60, sunAz: 271.16, earthAlt: 35.43, earthAz: 90.38 },
-      ourEngine: { sunAlt: -11.60, sunAz: 271.16, earthAlt: 35.43, earthAz: 90.38 },
-      deltaDeg: '< 0.01°',
-      status: 'VERIFIED EXACT (NASA DE421)'
-    },
-    {
-      siteId: 'mare-crisium',
-      siteName: 'Mare Crisium',
-      benchmarkDate: '2026-02-15 12:00 UTC',
-      nasaWebGeoCalc: { sunAlt: -47.49, sunAz: 71.13, earthAlt: 26.24, earthAz: 266.01 },
-      ourEngine: { sunAlt: -47.49, sunAz: 71.13, earthAlt: 26.24, earthAz: 266.01 },
-      deltaDeg: '< 0.01°',
-      status: 'VERIFIED EXACT (NASA DE421)'
-    }
-  ];
-}

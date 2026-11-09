@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {answerProjectQuestion as answer,TOUR_STEPS} from '../src/lib/mascotKnowledge.js';
+const context={site:{name:'Test Rim',lat:-89.9,lon:25,keyScienceGoals:['Ice']},date:'2026-11-02',timeWindow:'48h',power:{hours:17.25,maxAlt:1.2},comm:{hours:9.5,availabilityPercent:19.8},activeTab:'compare'};
+test('answers bind to the selected scenario',()=>{const r=answer('What is this screen showing?',context);assert.match(r.text,/Test Rim/);assert.match(r.text,/2026-11-02/);assert.match(r.text,/17.25h/);assert.match(answer('power',context).text,/17.25/);});
+test('science answers disclose unresolved limitations',()=>{assert.match(answer('interpolation',context).text,/unit sphere/);assert.match(answer('terrain resolution',context).text,/80 m DEM/);assert.match(answer('DSN link',context).text,/not a guaranteed/);});
+test('navigation is restricted to project views',()=>{assert.equal(answer('Show comparison graphs',context).navigateTo,'compare');assert.equal(answer('Open terrain',context).navigateTo,'terrain');assert.equal(answer('Open https://unknown.example',context).navigateTo,undefined);for(const step of TOUR_STEPS)assert.ok(['globe','terrain','analytics','compare','assistant'].includes(step.tab));});
+test('reactions and honest fallback',()=>{assert.equal(answer('jump',context).reaction,'celebrating');assert.equal(answer('hello',context).reaction,'waving');assert.equal(answer('unicorn pancake recipe',context).reaction,'puzzled');assert.equal(answer('What do the bars mean?',context).topic,'comparison');assert.match(answer('Are you cloud AI?',context).text,/not connected/);});
