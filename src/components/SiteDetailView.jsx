@@ -2,9 +2,10 @@
 // Classy Blue & Silver Telemetry and Science Detail View
 // Real NASA ephemeris calculations, interactive Recharts time series, and verified site facts.
 
-import { useState, useEffect, useMemo } from 'react';
-import { computePath, powerWindow, commWindow } from '../lib/ephemeris.js';
-import sites from '../data/sites.json';
+import { useState, useMemo } from 'react';
+import { useScience } from './ScienceProvider.jsx';
+import ScenarioDiagnostics from './ScenarioDiagnostics.jsx';
+import { coordinateText } from '../lib/mascotKnowledge.js';
 import {
   ResponsiveContainer,
   LineChart,
@@ -38,43 +39,13 @@ export default function SiteDetailView({
   setTimeWindow,
   onVisitTerrain,
 }) {
-  const [timeRange, setTimeRange] = useState(() => {
-    switch (timeWindow) {
-      case '48h': return 48;
-      case '7d': return 168;
-      case '14d': return 336;
-      case 'month': return 708;
-      default: return 24;
-    }
-  });
-  const [path, setPath] = useState([]);
-  const [power, setPower] = useState({ hours: 0, avgAlt: 0, maxAlt: 0, avgEfficiency: 0 });
-  const [comm, setComm] = useState({ hours: 0, avgAlt: 0, maxAlt: 0, availabilityPercent: 0 });
-  const [hoverIndex, setHoverIndex] = useState(0);
-
-  // Sync with external timeWindow prop
-  useEffect(() => {
-    switch (timeWindow) {
-      case '24h': setTimeRange(24); break;
-      case '48h': setTimeRange(48); break;
-      case '7d': setTimeRange(168); break;
-      case '14d': setTimeRange(336); break;
-      case 'month': setTimeRange(708); break;
-      default: setTimeRange(24); break;
-    }
-  }, [timeWindow]);
-
-  // Compute ephemeris path over selected timeRange
-  useEffect(() => {
-    if (!site) return;
-    const startTime = new Date(`${date}T00:00:00Z`);
-    const step = timeRange <= 24 ? 60 : timeRange <= 48 ? 120 : timeRange <= 168 ? 180 : 360;
-    const computed = computePath(site.lat, site.lon, startTime, timeRange, step);
-    setPath(computed);
-    setPower(powerWindow(computed));
-    setComm(commWindow(computed));
-    setHoverIndex(0);
-  }, [site, date, timeRange]);
+  const science=useScience();
+  const scenario=science.byId[site.id];
+  const timeRange=science.hours;
+  const path=scenario?.path??[];
+  const power=scenario?.power??{hours:0,avgAlt:0,maxAlt:0,avgEfficiency:0};
+  const comm=scenario?.comm??{hours:0,avgAlt:0,maxAlt:0,availabilityPercent:0};
+  const [hoverIndex,setHoverIndex]=useState(0);
 
   // Chart data format
   const chartData = useMemo(() => {
@@ -95,6 +66,7 @@ export default function SiteDetailView({
         earthAz: Number(p.earth.az.toFixed(1)),
         powerEfficiency: Number((p.powerEfficiency * 100).toFixed(0)),
         commActive: p.commActive,
+        sunHorizon:p.sunHorizon,earthHorizon:p.earthHorizon,
       };
     });
   }, [path, timeRange]);
@@ -108,7 +80,7 @@ export default function SiteDetailView({
         <div>
           <div className="flex items-center gap-2">
             <span className="telemetry-chip sun text-xs">
-              {site.lat.toFixed(1)}°S · {site.lon.toFixed(1)}°E
+              {coordinateText(site)}
             </span>
             <span className="text-[11px] font-mono text-[var(--ink-mute)]">
               {site.mission}
@@ -140,14 +112,14 @@ export default function SiteDetailView({
               <Sun className="w-4 h-4 text-[var(--coral)]" />
               Solar Span ({timeWindow})
             </span>
-            <span className="telemetry-chip sun text-[10px]">Active</span>
+            <span className="telemetry-chip sun text-[10px]">Modeled</span>
           </div>
           <div className="mt-3">
             <div className="text-3xl font-extrabold font-mono text-[var(--coral)]">
-              {power.hours}h
+              {scenario?`${power.hours}h`:'…'}
             </div>
             <div className="text-[11px] font-mono text-[var(--ink-mute)] mt-1 flex justify-between">
-              <span>Avg Alt: <strong className="text-[var(--ink)]">{power.avgAlt}°</strong></span>
+              <span>Avg visible alt: <strong className="text-[var(--ink)]">{power.avgAlt}°</strong></span>
               <span>Peak: <strong className="text-[var(--ink)]">{power.maxAlt}°</strong></span>
             </div>
           </div>
@@ -166,15 +138,15 @@ export default function SiteDetailView({
               <Radio className="w-4 h-4 text-[var(--mustard)]" />
               DTE Comm Window
             </span>
-            <span className="telemetry-chip earth text-[10px]">DSN Link</span>
+            <span className="telemetry-chip earth text-[10px]">Geometric LOS</span>
           </div>
           <div className="mt-3">
             <div className="text-3xl font-extrabold font-mono text-[var(--mustard)]">
-              {comm.hours}h
+              {scenario?`${comm.hours}h`:'…'}
             </div>
             <div className="text-[11px] font-mono text-[var(--ink-mute)] mt-1 flex justify-between">
-              <span>Avg Alt: <strong className="text-[var(--ink)]">{comm.avgAlt}°</strong></span>
-              <span>Uptime: <strong className="text-[var(--ink)]">{comm.availabilityPercent}%</strong></span>
+              <span>Avg visible alt: <strong className="text-[var(--ink)]">{comm.avgAlt}°</strong></span>
+              <span>Visible: <strong className="text-[var(--ink)]">{comm.availabilityPercent}%</strong></span>
             </div>
           </div>
           <div className="w-full bg-[var(--paper-dark)] h-1.5 rounded-full overflow-hidden mt-3">
@@ -213,9 +185,9 @@ export default function SiteDetailView({
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-[var(--ink-soft)] flex items-center gap-1.5">
               <Award className="w-4 h-4 text-[var(--coral)]" />
-              Mission Target
+              Regional mission context
             </span>
-            <span className="text-[10px] font-mono text-[var(--coral)]">CLPS Program</span>
+            <span className="text-[10px] font-mono text-[var(--coral)]">Catalog</span>
           </div>
           <div className="mt-3">
             <div className="text-sm font-bold text-[var(--ink)] truncate">
@@ -231,8 +203,10 @@ export default function SiteDetailView({
         </div>
       </div>
 
+      <ScenarioDiagnostics scenario={scenario}/>
+
       {/* ── Row 2: Recharts Ephemeris Trajectory Plot ───── */}
-      <div className="bento-plate p-5 space-y-4">
+      <div className="bento-plate p-5 space-y-4" data-guide="telemetry-chart">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[var(--line-soft)] pb-4">
           <div>
             <h2 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
@@ -240,7 +214,7 @@ export default function SiteDetailView({
               Sun & Earth Elevation vs Horizon Over Time
             </h2>
             <p className="text-xs text-[var(--ink-mute)] font-sans">
-              Red dashed line denotes 0° local lunar horizon. Values above 0° enable solar conversion and direct Earth sightline.
+              Dashed reference line is 0°. In terrain mode, dotted masks show the local crop horizon along each body’s azimuth. Visibility requires altitude above its mask.
             </p>
           </div>
 
@@ -255,7 +229,6 @@ export default function SiteDetailView({
               <button
                 key={tw.id}
                 onClick={() => {
-                  setTimeRange(tw.hours);
                   if (setTimeWindow) setTimeWindow(tw.id);
                 }}
                 className={`px-2.5 py-1 rounded text-xs font-mono transition-colors ${timeRange === tw.hours
@@ -283,18 +256,20 @@ export default function SiteDetailView({
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(238, 241, 247, 0.08)" />
               <XAxis
                 dataKey="label"
-                stroke="#667085"
+                stroke="#93a1ab"
                 fontSize={10}
                 tickLine={false}
                 minTickGap={30}
               />
               <YAxis
-                stroke="#667085"
+                stroke="#93a1ab"
                 fontSize={10}
                 tickLine={false}
-                domain={[-15, 45]}
+                domain={[(min)=>Math.min(0,Math.floor(min)),(max)=>Math.max(0,Math.ceil(max))]}
                 tickFormatter={(v) => `${v}°`}
               />
+              {science.settings.mode==='terrain'&&<Line dataKey="sunHorizon" name="sunHorizon" stroke="#b69765" strokeDasharray="3 3" dot={false}/>}
+              {science.settings.mode==='terrain'&&<Line dataKey="earthHorizon" name="earthHorizon" stroke="#6297a6" strokeDasharray="3 3" dot={false}/>}
               <ReferenceLine
                 y={0}
                 stroke="#ef4444"
@@ -304,21 +279,21 @@ export default function SiteDetailView({
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#0a0e17',
+                  backgroundColor: '#111820',
                   borderColor: 'rgba(238, 241, 247, 0.16)',
                   borderRadius: '10px',
                   fontSize: '11px',
-                  color: '#eef1f7',
+                  color: '#eeeae1',
                 }}
                 formatter={(val, name) => [
                   `${val}°`,
-                  name === 'sunAlt' ? 'Sun Elevation' : 'Earth Elevation',
+                  ({sunAlt:'Sun Elevation',earthAlt:'Earth Elevation',sunHorizon:'Array horizon',earthHorizon:'Antenna horizon'})[name]??name,
                 ]}
               />
               <Line
                 type="monotone"
                 dataKey="sunAlt"
-                stroke="#ffab5e"
+                stroke="#eac18b"
                 strokeWidth={2.4}
                 dot={false}
                 name="sunAlt"
@@ -326,7 +301,7 @@ export default function SiteDetailView({
               <Line
                 type="monotone"
                 dataKey="earthAlt"
-                stroke="#8fd3e8"
+                stroke="#91c6d4"
                 strokeWidth={2.4}
                 dot={false}
                 name="earthAlt"
@@ -363,9 +338,9 @@ export default function SiteDetailView({
             </div>
 
             <div>
-              <span className="text-[var(--ink-faint)] text-[10px] block">Direct Comm Link:</span>
+              <span className="text-[var(--ink-faint)] text-[10px] block">Earth center LOS:</span>
               <span className={`font-bold ${activePoint.commActive ? 'text-[var(--emerald)]' : 'text-[var(--crimson)]'}`}>
-                {activePoint.commActive ? 'ACTIVE' : 'OCCLUDED'}
+                {activePoint.commActive===null?'UNKNOWN':activePoint.commActive?'VISIBLE':'BLOCKED'}
               </span>
             </div>
           </div>
@@ -378,7 +353,7 @@ export default function SiteDetailView({
         <div className="bento-plate p-5 space-y-3">
           <h3 className="font-bold text-[var(--ink)] text-sm flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[var(--coral)]" />
-            Why NASA Chose This Candidate Site
+            Catalog rationale · unverified
           </h3>
           <p className="text-xs text-[var(--ink-soft)] leading-relaxed">
             {site.whyNASAChose}
@@ -386,7 +361,7 @@ export default function SiteDetailView({
 
           <div className="bg-[var(--paper-dark)] border border-[var(--line-soft)] rounded-xl p-3.5 space-y-1 mt-2">
             <span className="text-[var(--coral)] font-semibold text-xs flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5" /> Historical Lore
+              <Award className="w-3.5 h-3.5" /> Catalog background · unverified
             </span>
             <p className="text-xs text-[var(--ink-mute)] italic leading-relaxed">
               "{site.funFact}"

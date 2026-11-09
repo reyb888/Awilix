@@ -9,6 +9,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { computePositions } from '../lib/ephemeris.js';
+import {bilinearGrid,gridToENU,sampleTerrain} from '../lib/terrainScience.js';
+import { coordinateText } from '../lib/mascotKnowledge.js';
 import sites from '../data/sites.json';
 import {
   ArrowLeft, Sun, Radio, Compass, Mountain, Layers, Play,
@@ -18,7 +20,7 @@ import {
 // Global in-memory cache for instant 0ms site switching
 const terrainCache = new Map();
 
-export default function SiteTerrainView({ site, date, onBack }) {
+export default function SiteTerrainView({ site, date, onBack, ephemerisRevision }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -42,76 +44,15 @@ export default function SiteTerrainView({ site, date, onBack }) {
   const [loading, setLoading] = useState(!terrainCache.has(site.id));
   const [telemetry, setTelemetry] = useState(null);
   const [exaggeration, setExaggeration] = useState(1.0); // 1.0 = Real 1:1 Physical Aspect Ratio
-  const [is20Mpp, setIs20Mpp] = useState(terrainCache.get(site.id)?.is20Mpp ?? false);
+  const [surfaceMode,setSurfaceMode]=useState('elevation');
+  const [terrainError,setTerrainError]=useState(null);
 
-  // Fetch site-specific authentic NASA LOLA dataset (20 MPP with instant in-memory cache)
-  useEffect(() => {
-    // 1. Instant 0ms load if cached
-    if (terrainCache.has(site.id)) {
-      const cached = terrainCache.get(site.id);
-      setTerrainData(cached);
-      setIs20Mpp(cached.is20Mpp ?? true);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    // Immediately remove previous site's terrain mesh so user never sees old site under new name
-    if (terrainMeshRef.current && sceneRef.current) {
-      sceneRef.current.remove(terrainMeshRef.current);
-      terrainMeshRef.current = null;
-    }
-
-    fetch(`/terrain/${site.id}_terrain_20mpp.json`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`20 MPP not found: HTTP ${res.status}`);
-        return res.json();
-      })
-      .then((data) => {
-        data.is20Mpp = true;
-        terrainCache.set(site.id, data);
-        setTerrainData(data);
-        setIs20Mpp(true);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.warn('Falling back to standard terrain:', err);
-        fetch(`/terrain/${site.id}_terrain.json`)
-          .then((r) => r.json())
-          .then((fallbackData) => {
-            fallbackData.is20Mpp = false;
-            terrainCache.set(site.id, fallbackData);
-            setTerrainData(fallbackData);
-            setIs20Mpp(false);
-            setLoading(false);
-          })
-          .catch((e) => {
-            console.error('Failed to load terrain JSON:', e);
-            setLoading(false);
-          });
-      });
-  }, [site.id, site.name]);
-
-  // Background idle pre-fetch for all candidate sites
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      sites.forEach((s) => {
-        if (!terrainCache.has(s.id)) {
-          fetch(`/terrain/${s.id}_terrain_20mpp.json`)
-            .then((r) => (r.ok ? r.json() : null))
-            .then((data) => {
-              if (data) {
-                data.is20Mpp = true;
-                terrainCache.set(s.id, data);
-              }
-            })
-            .catch(() => {});
-        }
-      });
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, []);
+  useEffect(()=>{
+    let alive=true;setTerrainError(null);setLoading(true);setTerrainData(null);
+    if(!terrainCache.has(site.id))terrainCache.set(site.id,fetch(`/science-terrain/${site.id}.json`).then(r=>{if(!r.ok)throw Error(`Terrain HTTP ${r.status}`);return r.json();}).catch(e=>{terrainCache.delete(site.id);throw e;}));
+    terrainCache.get(site.id).then(data=>{if(alive){setTerrainData(data);setLoading(false);}}).catch(e=>{if(alive){setTerrainError(e.message);setLoading(false);}});
+    return()=>{alive=false;};
+  },[site.id]);
 
   // Handle Lighting Mode toggle
   useEffect(() => {
@@ -147,7 +88,7 @@ export default function SiteTerrainView({ site, date, onBack }) {
     const sunGroundY = Math.sin(sunAltRad) * sunGroundDist;
     const sunGroundZ = -Math.cos(sunAltRad) * Math.cos(sunAzRad) * sunGroundDist;
 
-    sunLightRef.current.position.set(sunGroundX, Math.max(0.05, sunGroundY), sunGroundZ);
+    sunLightRef.current.position.set(sunGroundX, sunGroundY, sunGroundZ);
     sunLightRef.current.target.position.set(0, 0, 0);
     sunLightRef.current.target.updateMatrixWorld();
 
@@ -155,7 +96,7 @@ export default function SiteTerrainView({ site, date, onBack }) {
     if (pos.sun.alt > 0) {
       sunLightRef.current.intensity = 3.2;
     } else {
-      sunLightRef.current.intensity = 0.04; // night darkness on Moon
+      sunLightRef.current.intensity = 0; // Inspection fill is separately controlled.
     }
 
     // 3D Sun in the sky (placed at sunSkyDist = 52)
@@ -191,7 +132,7 @@ export default function SiteTerrainView({ site, date, onBack }) {
         earthLightRef.current.target.updateMatrixWorld();
       }
     }
-  }, [site.lat, site.lon, date, currentHour]);
+  }, [site.lat, site.lon, date, currentHour, ephemerisRevision]);
 
   useEffect(() => {
     updateLighting();
@@ -213,7 +154,7 @@ export default function SiteTerrainView({ site, date, onBack }) {
 
     // SCENE
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x010309);
+    scene.background = new THREE.Color(0x0b121a);
     sceneRef.current = scene;
 
     // CAMERA (Positioned to look across crater rim)
@@ -387,70 +328,45 @@ export default function SiteTerrainView({ site, date, onBack }) {
       terrainMeshRef.current = null;
     }
 
-    const gridSize = terrainData.gridSize || 256;
-    const patchUnits = 10.0; // 10 units wide = 10.24 km patch (1 unit = ~1 km)
-    const geometry = new THREE.PlaneGeometry(patchUnits, patchUnits, gridSize - 1, gridSize - 1);
-    const posAttr = geometry.attributes.position;
-
-    // Select Raw Altimetry vs Continuous Interpolated Surface
-    const elevArray = useInterpolation ? terrainData.interpElev : terrainData.rawElev;
-    const minElev = terrainData.minElevationM;
-
-    // Scale elevation to real physical kilometers: 1000m = 1.0 unit
-    // Real 1:1 vertical-to-horizontal aspect ratio
-    for (let y = 0; y < gridSize; y++) {
-      for (let x = 0; x < gridSize; x++) {
-        const idx = y * gridSize + x;
-        const elevM = elevArray[idx] !== undefined ? elevArray[idx] : minElev;
-        const zKm = ((elevM - minElev) / 1000) * Math.max(0.2, exaggeration);
-        posAttr.setZ(idx, zKm);
+    if(terrainData.id!==site.id)return;
+    const sourceSize=terrainData.gridSize,gridSize=useInterpolation?256:sourceSize;
+    const geometry=new THREE.PlaneGeometry(1,1,gridSize-1,gridSize-1),posAttr=geometry.attributes.position;
+    const center=sampleTerrain(terrainData,0,0)??terrainData.minElevationM;
+    const valid=new Uint8Array(gridSize*gridSize),colors=new Float32Array(gridSize*gridSize*3);
+    for(let y=0;y<gridSize;y++)for(let x=0;x<gridSize;x++){
+      const idx=y*gridSize+x,gx=x/(gridSize-1)*(sourceSize-1),gy=y/(gridSize-1)*(sourceSize-1);
+      const z=useInterpolation?bilinearGrid(terrainData.rawElev,sourceSize,gx,gy):terrainData.rawElev[y*sourceSize+x];
+      const enu=gridToENU(terrainData,gx,gy);valid[idx]=Number.isFinite(z)?1:0;
+      const physical=(Number.isFinite(z)?z:center)-center-(enu.east**2+enu.north**2)/(2*1737400);
+      posAttr.setXYZ(idx,enu.east/1000,enu.north/1000,physical/1000*exaggeration);
+      let t=Number.isFinite(z)?(z-terrainData.minElevationM)/(terrainData.elevationSpanM||1):0;
+      if(surfaceMode==='slope'){
+        const a=bilinearGrid(terrainData.rawElev,sourceSize,Math.max(0,gx-1),gy),b=bilinearGrid(terrainData.rawElev,sourceSize,Math.min(sourceSize-1,gx+1),gy),c=bilinearGrid(terrainData.rawElev,sourceSize,gx,Math.max(0,gy-1)),d=bilinearGrid(terrainData.rawElev,sourceSize,gx,Math.min(sourceSize-1,gy+1));
+        if([a,b,c,d].every(Number.isFinite)){const dx=(b-a)/((Math.min(sourceSize-1,gx+1)-Math.max(0,gx-1))*terrainData.spacingXM),dy=(d-c)/((Math.min(sourceSize-1,gy+1)-Math.max(0,gy-1))*terrainData.spacingYM);t=Math.min(1,Math.atan(Math.hypot(dx,dy))*180/Math.PI/30);}else t=0;
       }
+      const color=new THREE.Color().lerpColors(new THREE.Color(surfaceMode==='slope'?'#7fbdca':'#364b5d'),new THREE.Color(surfaceMode==='slope'?'#e39d75':'#ead5ac'),Math.max(0,Math.min(1,t)));
+      colors.set([color.r,color.g,color.b],idx*3);
     }
-    posAttr.needsUpdate = true;
-    geometry.computeVertexNormals();
+    // Missing elevation is a hole, never an artificial zero-height wall.
+    const indices=geometry.index.array,kept=[];
+    for(let i=0;i<indices.length;i+=3)if(valid[indices[i]]&&valid[indices[i+1]]&&valid[indices[i+2]])kept.push(indices[i],indices[i+1],indices[i+2]);
+    geometry.setIndex(kept);geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));geometry.computeVertexNormals();
+    const textureMap=surfaceMode==='texture'?new THREE.TextureLoader().load(terrainData.textureUrl):null;
+    if(textureMap)textureMap.colorSpace=THREE.SRGBColorSpace;
+    const material=new THREE.MeshStandardMaterial({map:textureMap,vertexColors:!textureMap,roughness:.92,metalness:.02,wireframe,flatShading:!useInterpolation,side:THREE.DoubleSide});
+    const mesh=new THREE.Mesh(geometry,material);mesh.rotation.x=-Math.PI/2;mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);terrainMeshRef.current=mesh;
+    const lander=new THREE.Group();lander.rotation.x=Math.PI/2;
+    lander.add(new THREE.Mesh(new THREE.CylinderGeometry(.08,.12,.08,8),new THREE.MeshStandardMaterial({color:0xeac18b})));
+    const antenna=new THREE.Mesh(new THREE.CylinderGeometry(.01,.01,.25,8),new THREE.MeshBasicMaterial({color:0x91c6d4}));antenna.position.y=.125;lander.add(antenna);lander.position.set(0,0,.04);mesh.add(lander);
+    const extent=Math.max(terrainData.widthKm,terrainData.heightKm);
+    controlsRef.current.maxDistance=extent*8;
+    if(cameraRef.current.userData.siteId!==site.id){cameraRef.current.position.set(0,extent*.6,extent*.9);controlsRef.current.target.set(0,0,0);cameraRef.current.userData.siteId=site.id;}
+    return()=>{scene.remove(mesh);if(terrainMeshRef.current===mesh)terrainMeshRef.current=null;mesh.traverse(o=>{o.geometry?.dispose();if(o.material){o.material.map?.dispose();o.material.dispose();}});};
+  }, [terrainData, useInterpolation, wireframe, exaggeration, surfaceMode, site.id]);
 
-    // Photographic 20 MPP hillshade + PSR texture
-    const textureLoader = new THREE.TextureLoader();
-    const textureUrl = terrainData.textureUrl || `/terrain/${site.id}_texture_20mpp.png`;
-    const textureMap = textureLoader.load(textureUrl);
-    textureMap.colorSpace = THREE.SRGBColorSpace;
-
-    const material = new THREE.MeshStandardMaterial({
-      map: textureMap,
-      roughness: 0.92,
-      metalness: 0.05,
-      wireframe: wireframe,
-      flatShading: !useInterpolation,
-    });
-
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.rotation.x = -Math.PI / 2; // Lay horizontal (Z becomes Up)
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    scene.add(mesh);
-    terrainMeshRef.current = mesh;
-
-    // LANDER TOUCHDOWN MARKER
-    const landerGroup = new THREE.Group();
-    const landerGeom = new THREE.CylinderGeometry(0.08, 0.12, 0.08, 8);
-    const landerMat = new THREE.MeshStandardMaterial({ color: 0xffab5e, metalness: 0.8, roughness: 0.2 });
-    landerGroup.add(new THREE.Mesh(landerGeom, landerMat));
-
-    const antennaGeom = new THREE.CylinderGeometry(0.01, 0.01, 0.25, 8);
-    antennaGeom.translate(0, 0.125, 0);
-    landerGroup.add(new THREE.Mesh(antennaGeom, new THREE.MeshBasicMaterial({ color: 0xef4444 })));
-
-    // Place lander at center vertex elevation
-    const centerIdx = Math.floor(gridSize / 2) * gridSize + Math.floor(gridSize / 2);
-    const centerElev = elevArray[centerIdx] || minElev;
-    const centerZ = ((centerElev - minElev) / 1000) * Math.max(0.2, exaggeration);
-    landerGroup.position.set(0, centerZ + 0.04, 0);
-    mesh.add(landerGroup);
-
-  }, [terrainData, useInterpolation, wireframe, exaggeration, site.id]);
 
   return (
-    <div className="relative w-full h-full min-h-[580px] bg-[var(--paper)] rounded-2xl overflow-hidden border border-[var(--line)] shadow-2xl flex flex-col">
+    <div className="site-terrain-view relative w-full h-full min-h-[580px] bg-[var(--paper)] rounded-2xl overflow-hidden border border-[var(--line)] shadow-2xl flex flex-col">
       {/* 3D WebGL Canvas */}
       <div ref={containerRef} className="w-full flex-1 relative cursor-grab active:cursor-grabbing" />
 
@@ -460,22 +376,23 @@ export default function SiteTerrainView({ site, date, onBack }) {
           <div className="relative mb-3">
             <div className="w-12 h-12 rounded-full border-2 border-[var(--coral)] border-t-transparent animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-[var(--coral)] font-bold">
-              20M
+              DEM
             </div>
           </div>
           <div className="text-xs font-mono font-bold text-[var(--ink)] tracking-widest uppercase">
-            Acquiring NASA LOLA 20 MPP Altimetry
+            Loading masked terrain crop
           </div>
           <div className="text-[11px] font-mono text-[var(--mustard)] mt-1 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[var(--laser-crimson)] animate-ping" />
-            <span>{site.name} · ({site.lat}°, {site.lon}°)</span>
+            <span>{site.name} · ({coordinateText(site)})</span>
           </div>
           <div className="text-[10px] font-mono text-[var(--ink-faint)] mt-1.5">
-            Resolving 65,536 Surface Vertices & Directional Shadows
+            Source resolution and registration are shown in Data & accuracy
           </div>
         </div>
       )}
 
+      {terrainError&&<div className="science-warning" role="alert">{terrainError}. Return to the globe or choose another region.</div>}
       {/* Top Left: Back Button & Site Identity */}
       <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
         <button
@@ -489,18 +406,18 @@ export default function SiteTerrainView({ site, date, onBack }) {
         <div className="bento-plate px-3.5 py-1.5 hidden sm:flex items-center gap-2 bg-[var(--paper-warm)]/90 backdrop-blur-md">
           <span className="w-2 h-2 rounded-full bg-[var(--laser-crimson)] shadow-[0_0_8px_var(--laser-crimson)]" />
           <span className="text-xs font-semibold text-[var(--ink)] tracking-wide">{site.name}</span>
-          <span className="text-[10px] text-[var(--ink-faint)] font-mono">({site.lat}°, {site.lon}°)</span>
+          <span className="text-[10px] text-[var(--ink-faint)] font-mono">({coordinateText(site)})</span>
         </div>
 
         {/* 20 MPP Resolution Badge */}
         <div className="hidden md:flex items-center gap-1.5 bento-plate px-3 py-1.5 text-xs font-mono bg-[var(--paper-warm)]/90 backdrop-blur-md text-[var(--ink-soft)]">
           <CheckCircle2 className="w-3.5 h-3.5 text-[var(--emerald)]" />
-          <span>NASA LOLA 20 MPP ({terrainData?.gridSize || 256}×{terrainData?.gridSize || 256} Altimetry)</span>
+          <span>{terrainData?.metadata.nativeResolutionDescription??'Loading terrain metadata'}</span>
         </div>
       </div>
 
       {/* Top Right: View Modes & Lighting Button */}
-      <div className="absolute top-4 right-4 z-10 flex flex-wrap items-center gap-2">
+      <div className="absolute top-4 right-4 z-10 flex flex-wrap items-center gap-2" data-guide="terrain-controls">
         {/* LIGHTING BUTTON (Inspection fill) */}
         <button
           onClick={() => setLightingMode(!lightingMode)}
@@ -523,10 +440,10 @@ export default function SiteTerrainView({ site, date, onBack }) {
               ? 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--mustard)] border-[rgba(143,211,232,0.3)] shadow-lg shadow-[rgba(143,211,232,0.1)]'
               : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--coral)] border-[rgba(255,171,94,0.3)] shadow-lg shadow-[rgba(255,171,94,0.1)]'
           }`}
-          title="Toggle between smooth continuous surface and raw discrete altimetry"
+          title="Switch between the bundled source grid and a bilinear display mesh; subdivision adds no measured detail"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          <span>{useInterpolation ? 'Smooth Surface' : 'Raw Altimetry'}</span>
+          <span>{useInterpolation ? 'Bilinear display mesh' : 'Source grid'}</span>
         </button>
 
         {/* Wireframe Mesh Toggle */}
@@ -543,6 +460,13 @@ export default function SiteTerrainView({ site, date, onBack }) {
         </button>
       </div>
 
+      <div className="absolute top-24 right-4 z-10 bento-plate p-3 terrain-inspector">
+        <label className="text-xs block">Surface layer <select aria-label="Terrain surface layer" value={surfaceMode} onChange={e=>setSurfaceMode(e.target.value)} className="bg-[#111820] border border-[#34434e] rounded p-1 ml-2"><option value="elevation">Elevation</option><option value="slope">Slope estimate</option><option value="texture">Legacy hillshade</option></select></label>
+        <label className="text-xs block mt-2">Visual exaggeration: {exaggeration}×<input aria-label="Terrain vertical exaggeration" type="range" min="1" max="5" step="0.5" value={exaggeration} onChange={e=>setExaggeration(Number(e.target.value))} className="w-full"/></label>
+        <p className="text-[10px] text-[var(--ink-mute)]">{surfaceMode==='slope'?'Cyan 0° → peach ≥30°. Source-limited estimate.':surfaceMode==='texture'?'Baked illumination; use elevation for dynamic lighting.':'Elevation color: low slate → high ivory.'}</p>
+        <button className="btn-ghost text-xs mt-2" onClick={()=>{const extent=Math.max(terrainData?.widthKm??10,terrainData?.heightKm??10);cameraRef.current.position.set(0,extent*.6,extent*.9);controlsRef.current.target.set(0,0,0);}}>Reset camera</button>
+        <p className="text-[9px] text-[var(--ink-mute)] mt-1">ENU north arrow · 1 scene unit = 1 km.<br/>Exaggeration affects visuals only. Registration unverified.</p>
+      </div>
       {/* Bottom Left: Physical Terrain Metrics */}
       <div className="absolute bottom-16 left-4 z-10 bento-plate p-3.5 max-w-xs text-xs space-y-2 bg-[var(--paper-warm)]/90 backdrop-blur-md">
         <div className="flex items-center justify-between">
@@ -558,7 +482,7 @@ export default function SiteTerrainView({ site, date, onBack }) {
         <div className="pt-1.5 border-t border-[var(--line-soft)] flex items-center justify-between text-[10px] text-[var(--ink-faint)] font-mono">
           <span>Scale & Grid:</span>
           <span className="text-[var(--coral)]">
-            {is20Mpp ? '20m/px · 10.24 km Patch' : '80m/px Patch'}
+            {terrainData?`${terrainData.widthKm.toFixed(2)} × ${terrainData.heightKm.toFixed(2)} km`:'…'}
           </span>
         </div>
       </div>
