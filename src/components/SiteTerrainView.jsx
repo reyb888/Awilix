@@ -700,7 +700,7 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
                 ? 'bg-[var(--coral)] text-[var(--paper-dark)] border-[var(--coral)] shadow-lg shadow-[rgba(255,171,94,0.25)]'
                 : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--ink-soft)]'
             }`}
-            title="View the 20 m/pixel inspection image with shadows disabled; elevation remains at native sampling"
+            title="View the 20 m/pixel inspection image without extra 3D shadows; source hillshade and permanent-shadow mask remain, and elevation stays at native sampling"
           >
             <Lightbulb className={`w-3.5 h-3.5 ${lightingMode ? 'text-[var(--paper-dark)] fill-current' : 'text-[var(--coral)]'}`} />
             <span>{lightingMode ? 'Lighting: ON' : 'Lighting: OFF'}</span>
