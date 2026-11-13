@@ -604,7 +604,7 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
                 date={date}
                 timeWindow={timeWindow}
                 setTimeWindow={setTimeWindow}
-                onVisitTerrain={() => setActiveTab('terrain')}
+                onVisitTerrain={(targetSite) => handleVisitSite(targetSite || selectedSite)}
               />
             )}
 

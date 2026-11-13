@@ -111,8 +111,9 @@ export default function SiteDetailView({
         </div>
 
         <button
-          onClick={onVisitTerrain}
-          className="btn-primary text-xs cursor-pointer"
+          onClick={() => onVisitTerrain?.(site)}
+          className="btn-primary text-xs cursor-pointer flex items-center gap-1.5"
+          title="Explore high-resolution 3D lunar altimetry and real-time lighting for this site"
         >
           <Mountain className="w-3.5 h-3.5" />
           <span>Launch 3D Terrain Altimetry</span>
