@@ -39,6 +39,22 @@ export default function Navbar({
 }) {
   const [presetOpen, setPresetOpen] = useState(false);
   const navRef = useRef(null);
+  const presetRef = useRef(null);
+
+  // Close preset dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (presetRef.current && !presetRef.current.contains(e.target)) {
+        setPresetOpen(false);
+      }
+    }
+    if (presetOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [presetOpen]);
 
   // GSAP tab switch animation
   useEffect(() => {
@@ -174,7 +190,7 @@ export default function Navbar({
           {/* Date Picker, Steppers & Time Window Controls */}
           <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-end">
             {/* Mission Presets Dropdown */}
-            <div className="relative">
+            <div className="relative" ref={presetRef}>
               <button
                 onClick={() => setPresetOpen(!presetOpen)}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--bone)] hover:bg-[var(--bone-hover)] border border-[var(--line)] text-xs text-[var(--ink)] font-sans transition-colors cursor-pointer"
@@ -187,7 +203,7 @@ export default function Navbar({
 
               {presetOpen && (
                 <div
-                  className="absolute right-0 mt-2 w-64 bg-[var(--bone)] border border-[var(--line)] rounded-xl shadow-2xl p-1.5 z-[100] animate-fade-in"
+                  className="absolute left-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-32px)] bg-[var(--bone)] border border-[var(--line)] rounded-xl shadow-2xl p-1.5 z-[100] animate-fade-in"
                   onClick={() => setPresetOpen(false)}
                 >
                   <div className="text-[10px] font-mono uppercase text-[var(--ink-faint)] px-2.5 py-1 border-b border-[var(--line-soft)]">
@@ -197,10 +213,12 @@ export default function Navbar({
                     <button
                       key={idx}
                       onClick={() => setDate(p.date)}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-[rgba(238,241,247,0.06)] flex items-center justify-between transition-colors cursor-pointer"
+                      className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-[rgba(238,241,247,0.06)] flex items-center justify-between gap-2 transition-colors cursor-pointer"
                     >
-                      <span>{p.label}</span>
-                      <span className="font-mono text-[10px] text-[var(--coral)]">{p.date}</span>
+                      <span className="truncate flex-1">{p.label}</span>
+                      <span className="font-mono text-[11px] text-[var(--coral)] whitespace-nowrap flex-shrink-0">
+                        {p.date}
+                      </span>
                     </button>
                   ))}
                 </div>
