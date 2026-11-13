@@ -11,12 +11,49 @@ import {
   CheckCircle2, ChevronLeft, ChevronRight, Clock, Sparkles, ChevronDown
 } from 'lucide-react';
 
-const MISSION_PRESETS = [
-  { label: 'Today (calculated geometry)', date: new Date().toISOString().split('T')[0] },
-  { label: 'Artemis III test flight (Earth orbit · 2027)', date: '2027-06-15' },
-  { label: 'IM-1 Odysseus Landing (Feb 2024)', date: '2024-02-22' },
-  { label: 'IM-2 Athena landing (Mar 6, 2025)', date: '2025-03-06' },
-  { label: 'NASA 2026 Solar Benchmark', date: '2026-02-15' },
+export const MISSION_PRESETS = [
+  {
+    id: 'today',
+    label: 'Today (Calculated Geometry)',
+    date: new Date().toISOString().split('T')[0],
+    siteId: 'shackleton-rim',
+    subtitle: 'Real-time solar & Earth geometry',
+  },
+  {
+    id: 'im1',
+    label: 'IM-1 Odysseus Landing (Feb 22, 2024)',
+    date: '2024-02-22',
+    siteId: 'malapert-a',
+    subtitle: 'First commercial lunar touchdown · Malapert A',
+  },
+  {
+    id: 'im2',
+    label: 'IM-2 Athena Landing (Mar 6, 2025)',
+    date: '2025-03-06',
+    siteId: 'mons-mouton',
+    subtitle: 'PRIME-1 ice drill mission · Mons Mouton Plateau',
+  },
+  {
+    id: 'artemis3',
+    label: 'Artemis III Polar Candidate (2027)',
+    date: '2027-06-15',
+    siteId: 'shackleton-ridge',
+    subtitle: 'Peak sunlight ridge · Crewed exploration',
+  },
+  {
+    id: 'benchmark2026',
+    label: 'NASA 2026 Solar Benchmark (Feb 15, 2026)',
+    date: '2026-02-15',
+    siteId: 'shackleton-rim',
+    subtitle: 'Optimal illumination window · Shackleton Rim',
+  },
+  {
+    id: 'nobile-ice',
+    label: 'Nobile Polar Ice Reconnaissance',
+    date: '2026-04-10',
+    siteId: 'nobile',
+    subtitle: 'Permanently shadowed craters · Deep cold traps',
+  },
 ];
 
 const TIME_WINDOWS = [
@@ -36,6 +73,7 @@ export default function Navbar({
   setTimeWindow,
   selectedSite,
   onOpenVerification,
+  onSelectPreset,
 }) {
   const [presetOpen, setPresetOpen] = useState(false);
   const navRef = useRef(null);
@@ -211,11 +249,24 @@ export default function Navbar({
                   </div>
                   {MISSION_PRESETS.map((p, idx) => (
                     <button
-                      key={idx}
-                      onClick={() => setDate(p.date)}
+                      key={p.id || idx}
+                      onClick={() => {
+                        if (onSelectPreset) {
+                          onSelectPreset(p);
+                        } else {
+                          setDate(p.date);
+                        }
+                      }}
                       className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-[rgba(238,241,247,0.06)] flex items-center justify-between gap-2 transition-colors cursor-pointer"
                     >
-                      <span className="truncate flex-1">{p.label}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{p.label}</div>
+                        {p.subtitle && (
+                          <div className="text-[10px] text-[var(--ink-mute)] truncate font-mono">
+                            {p.subtitle}
+                          </div>
+                        )}
+                      </div>
                       <span className="font-mono text-[11px] text-[var(--coral)] whitespace-nowrap flex-shrink-0">
                         {p.date}
                       </span>

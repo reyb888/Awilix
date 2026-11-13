@@ -15,7 +15,7 @@ import CompareView from './components/CompareView.jsx';
 import SiteDetailView from './components/SiteDetailView.jsx';
 import MoonAssistant from './components/MoonAssistant.jsx';
 import AstronautGuide from './components/AstronautGuide.jsx';
-import Navbar from './components/Navbar.jsx';
+import Navbar, { MISSION_PRESETS } from './components/Navbar.jsx';
 import { ScienceProvider, useScience } from './components/ScienceProvider.jsx';
 import ScienceControls from './components/ScienceControls.jsx';
 import { coordinateText } from './lib/mascotKnowledge.js';
@@ -249,6 +249,8 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
   const [selectedSite, setSelectedSite] = useState(sites[0]);
   const [activeTab, setActiveTab] = useState('globe');
   const [verificationOpen, setVerificationOpen] = useState(false);
+  const [activePreset, setActivePreset] = useState(null);
+  const siteInfoRef = useRef(null);
   const [comparisonPins, setComparisonPins] = useState(() => [
     { siteId: sites[0].id, date },
     { siteId: sites[1].id, date },
@@ -269,6 +271,28 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
     setSelectedSite(site);
     setActiveTab('terrain');
   }, []);
+
+  const handleSelectPreset = useCallback((preset) => {
+    setActivePreset(preset);
+    setDate(preset.date);
+    if (preset.siteId) {
+      const s = sites.find((item) => item.id === preset.siteId);
+      if (s) {
+        setSelectedSite(s);
+      }
+    }
+  }, [setDate]);
+
+  // GSAP animation when selected site or date changes
+  useEffect(() => {
+    if (siteInfoRef.current) {
+      gsap.fromTo(
+        siteInfoRef.current,
+        { opacity: 0.7, y: 8 },
+        { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' }
+      );
+    }
+  }, [selectedSite, date]);
 
   // GSAP Tab Switching Animation
   const tabViewRef = useRef(null);
@@ -304,6 +328,7 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
         setTimeWindow={setTimeWindow}
         selectedSite={selectedSite}
         onOpenVerification={() => setVerificationOpen(true)}
+        onSelectPreset={handleSelectPreset}
       />
 
       {/* Surface Ticker Wire (6 South Pole Candidate Sites) */}
@@ -460,10 +485,12 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
                     </div>
 
                     {/* Selected Site Information Card */}
-                    <div className="bento-plate p-4 flex-1 space-y-3">
+                    <div ref={siteInfoRef} className="bento-plate p-4 flex-1 space-y-3">
                       <div className="flex items-center justify-between border-b border-[var(--line-soft)] pb-2">
                         <div>
-                          <h3 className="font-sans font-bold text-sm text-[var(--ink)]">{selectedSite.name}</h3>
+                          <h3 className="font-sans font-bold text-sm text-[var(--ink)] flex items-center gap-2">
+                            <span>{selectedSite.name}</span>
+                          </h3>
                           <p className="text-[10px] font-mono text-[var(--ink-faint)]">
                             {selectedSite.targetRegion}
                           </p>
@@ -473,14 +500,51 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
                         </span>
                       </div>
 
+                      {/* Active Mission / Context Badge */}
+                      <div className="p-2.5 rounded-lg bg-[rgba(234,193,139,0.08)] border border-[rgba(234,193,139,0.2)] text-xs text-[var(--coral)] flex items-start gap-2">
+                        <Sparkles className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold leading-snug">
+                            {selectedSite.mission?.split('(')[0]?.trim() || selectedSite.mission}
+                          </div>
+                          <div className="text-[10px] text-[var(--ink-mute)] font-mono mt-0.5">
+                            Target Date: <strong className="text-[var(--ink)]">{date} UTC</strong> · {selectedSite.contractor}
+                          </div>
+                        </div>
+                      </div>
+
                       <p className="text-xs text-[var(--ink-soft)] leading-relaxed">
                         {selectedSite.whyNASAChose}
                       </p>
 
+                      {selectedSite.funFact && (
+                        <div className="p-2.5 rounded-lg bg-[var(--paper-dark)] border border-[var(--line-soft)] text-xs text-[var(--ink-mute)] italic leading-relaxed">
+                          "{selectedSite.funFact}"
+                        </div>
+                      )}
+
                       <div className="pt-2 border-t border-[var(--line-soft)] flex items-center justify-between text-xs font-mono">
                         <span className="text-[var(--ink-faint)]">Water Ice Potential:</span>
-                        <span className="text-[var(--coral)]">{selectedSite.waterIcePotential?.split('(')[0]?.trim() || 'High'}</span>
+                        <span className="text-[var(--coral)] font-semibold">{selectedSite.waterIcePotential?.split('(')[0]?.trim() || 'High'}</span>
                       </div>
+
+                      {selectedSite.keyScienceGoals?.length > 0 && (
+                        <div className="pt-2 border-t border-[var(--line-soft)] text-xs">
+                          <span className="text-[10px] font-mono uppercase text-[var(--ink-faint)] block mb-1.5">
+                            Key Scientific Payloads:
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {selectedSite.keyScienceGoals.map((goal, i) => (
+                              <span
+                                key={i}
+                                className="text-[10px] px-2 py-0.5 rounded bg-[var(--paper-dark)] text-[var(--ink-soft)] border border-[var(--line-soft)]"
+                              >
+                                {goal}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
