@@ -542,36 +542,36 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
       )}
 
       {/* ── Bottom Unified HUD Dashboard (Elevation + Timeline) ─────────────────── */}
-      <div className="absolute bottom-3 inset-x-3 z-20 bento-plate p-3 bg-[var(--paper-warm)]/95 backdrop-blur-md border border-[var(--line)] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-3">
+      <div className="absolute bottom-3 inset-x-3 z-20 bento-plate p-2.5 sm:p-3 bg-[var(--paper-warm)]/95 backdrop-blur-md border border-[var(--line)] shadow-2xl flex flex-wrap items-center justify-between gap-2.5 overflow-hidden">
         {/* Physical Terrain Elevation Metrics */}
-        <div className="flex flex-wrap items-center gap-3 text-xs w-full md:w-auto border-b md:border-b-0 border-[var(--line-soft)] pb-2 md:pb-0">
-          <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-3 text-xs w-full lg:w-auto border-b lg:border-b-0 border-[var(--line-soft)] pb-2 lg:pb-0 min-w-0">
+          <div className="flex items-center gap-1.5 whitespace-nowrap">
             <span className="text-[10px] font-mono uppercase text-[var(--ink-faint)]">Relief:</span>
             <span className="font-mono font-bold text-[var(--emerald)]">
               {terrainData ? `${terrainData.elevationSpanM.toLocaleString()} m` : 'Loading...'}
             </span>
           </div>
           <span className="text-[var(--line)] hidden sm:inline">|</span>
-          <div className="text-[11px] text-[var(--ink-mute)] flex items-center gap-2">
+          <div className="text-[11px] text-[var(--ink-mute)] flex items-center gap-2 whitespace-nowrap">
             <span>Min: <b className="font-mono text-[var(--ink)]">{terrainData?.minElevationM ?? '…'}m</b></span>
             <span>Max: <b className="font-mono text-[var(--ink)]">{terrainData?.maxElevationM ?? '…'}m</b></span>
           </div>
           <span className="text-[var(--line)] hidden sm:inline">|</span>
-          <div className="text-[10px] text-[var(--ink-faint)] font-mono">
+          <div className="text-[10px] text-[var(--ink-faint)] font-mono whitespace-nowrap">
             Grid: <span className="text-[var(--coral)]">{terrainData ? `${terrainData.widthKm.toFixed(1)} × ${terrainData.heightKm.toFixed(1)} km` : '…'}</span>
           </div>
         </div>
 
         {/* Timeline Scrubber & Live Telemetry */}
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1 lg:flex-initial justify-end">
           <button
             onClick={() => setIsPlaying(!isPlaying)}
-            className="btn-ghost text-xs font-mono font-bold px-2.5 py-1 text-[var(--coral)] border border-[rgba(255,171,94,0.3)] hover:bg-[rgba(255,171,94,0.1)] cursor-pointer"
+            className="btn-ghost text-xs font-mono font-bold px-2.5 py-1 text-[var(--coral)] border border-[rgba(255,171,94,0.3)] hover:bg-[rgba(255,171,94,0.1)] cursor-pointer flex-shrink-0"
           >
             {isPlaying ? 'PAUSE' : 'PLAY'}
           </button>
 
-          <span className="text-xs font-mono text-[var(--ink-soft)] min-w-[70px]">
+          <span className="text-xs font-mono text-[var(--ink-soft)] whitespace-nowrap font-medium min-w-[65px]">
             {String(currentHour).padStart(2, '0')}:00 UTC
           </span>
 
@@ -581,18 +581,18 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
             max="23"
             value={currentHour}
             onChange={(e) => setCurrentHour(Number(e.target.value))}
-            className="flex-1 md:w-44 accent-[var(--coral)] h-1.5 bg-[var(--bone)] rounded-lg cursor-pointer"
+            className="w-20 sm:w-28 md:w-36 min-w-[60px] max-w-full accent-[var(--coral)] h-1.5 bg-[var(--bone)] rounded-lg cursor-pointer"
           />
 
           {telemetry && (
-            <div className="hidden lg:flex items-center gap-3 text-xs font-mono pl-2 border-l border-[var(--line-soft)]">
+            <div className="hidden xl:flex items-center gap-3 text-xs font-mono pl-2 border-l border-[var(--line-soft)] whitespace-nowrap">
               <span className="flex items-center gap-1 text-[var(--coral)]">
                 <Sun className="w-3.5 h-3.5" />
-                <span>Sun: {telemetry.sun.alt.toFixed(1)}°</span>
+                <span>{telemetry.sun.alt.toFixed(1)}°</span>
               </span>
               <span className="flex items-center gap-1 text-[var(--mustard)]">
                 <Radio className="w-3.5 h-3.5" />
-                <span>Earth: {telemetry.earth.alt.toFixed(1)}°</span>
+                <span>{telemetry.earth.alt.toFixed(1)}°</span>
               </span>
             </div>
           )}

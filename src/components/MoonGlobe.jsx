@@ -849,25 +849,25 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick, ephemerisRe
       )}
 
       {/* ── Bottom: Live Astronomical Telemetry & Time Scrubber ── */}
-      <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-col md:flex-row items-center justify-between gap-3 bg-[#0a0e17]/90 backdrop-blur-md border border-[var(--line)] rounded-xl p-3 pointer-events-auto shadow-2xl">
-        <div className="flex items-center gap-4 text-xs font-telemetry">
-          <div className="flex items-center gap-1.5 text-[var(--coral)]">
-            <Sun className="w-3.5 h-3.5" />
+      <div className="absolute bottom-3 inset-x-3 z-10 flex flex-wrap items-center justify-between gap-2.5 bg-[#0a0e17]/90 backdrop-blur-md border border-[var(--line)] rounded-xl p-2.5 pointer-events-auto shadow-2xl overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 text-xs font-telemetry min-w-0">
+          <div className="flex items-center gap-1.5 text-[var(--coral)] whitespace-nowrap">
+            <Sun className="w-3.5 h-3.5 flex-shrink-0" />
             <span>{(telemetry.sunDistKm / 1000000).toFixed(2)}M km</span>
             <span className="text-[10px] text-[var(--ink-faint)]">({(telemetry.sunDistKm / NASA.MOON_R_KM).toFixed(0)} R_moon)</span>
           </div>
-          <div className="flex items-center gap-1.5 text-[var(--mustard)]">
-            <Radio className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-1.5 text-[var(--mustard)] whitespace-nowrap">
+            <Radio className="w-3.5 h-3.5 flex-shrink-0" />
             <span>{telemetry.earthDistKm.toLocaleString()} km</span>
             <span className="text-[10px] text-[var(--ink-faint)]">({(telemetry.earthDistKm / NASA.MOON_R_KM).toFixed(1)} R_moon)</span>
           </div>
-          <div className="hidden sm:inline-flex text-[var(--ink-mute)]">
+          <div className="hidden sm:inline-flex text-[var(--ink-mute)] whitespace-nowrap">
             Phase: <span className="text-[var(--ink)] ml-1 font-bold">{telemetry.earthPhase}%</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <span className="text-xs font-telemetry text-[var(--ink-mute)] whitespace-nowrap">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1 sm:flex-initial justify-end">
+          <span className="text-xs font-telemetry text-[var(--ink-soft)] whitespace-nowrap font-medium">
             {String(currentHour).padStart(2, '0')}:00 UTC
           </span>
           <input
@@ -876,7 +876,7 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick, ephemerisRe
             max="23"
             value={currentHour}
             onChange={(e) => setCurrentHour(Number(e.target.value))}
-            className="w-full md:w-48 accent-[var(--coral)] cursor-pointer"
+            className="w-24 sm:w-32 md:w-40 min-w-[70px] max-w-full accent-[var(--coral)] cursor-pointer"
           />
         </div>
       </div>
