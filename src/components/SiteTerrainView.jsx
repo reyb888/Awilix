@@ -453,7 +453,15 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geometry.computeVertexNormals();
 
-    const textureMap = surfaceMode === 'texture' ? new THREE.TextureLoader().load(terrainData.textureUrl) : null;
+    // Lighting inspection uses the bundled 20 m/pixel raster texture. The
+    // elevation grid remains at its native source resolution (80 m/pixel for
+    // polar crops); the finer image is not a higher-resolution DEM.
+    const textureUrl = lightingMode
+      ? `/terrain/${site.id}_texture_20mpp.png`
+      : surfaceMode === 'texture'
+        ? terrainData.textureUrl
+        : null;
+    const textureMap = textureUrl ? new THREE.TextureLoader().load(textureUrl) : null;
     if (textureMap) textureMap.colorSpace = THREE.SRGBColorSpace;
 
     const material = new THREE.MeshStandardMaterial({
@@ -512,7 +520,7 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
         }
       });
     };
-  }, [terrainData, useInterpolation, wireframe, exaggeration, surfaceMode, site.id]);
+  }, [terrainData, useInterpolation, wireframe, exaggeration, surfaceMode, lightingMode, site.id]);
 
 
   return (
@@ -661,6 +669,11 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
                 <option value="texture">Hillshade Texture</option>
               </select>
             </label>
+            {lightingMode && (
+              <p className="text-[10px] text-[var(--ink-faint)]">
+                Lighting uses 20 m/pixel imagery; elevation remains 80 m/pixel.
+              </p>
+            )}
 
             <label className="text-xs block text-[var(--ink-mute)]">
               <div className="flex justify-between">
