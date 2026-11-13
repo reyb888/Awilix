@@ -14,7 +14,8 @@ import { coordinateText } from '../lib/mascotKnowledge.js';
 import sites from '../data/sites.json';
 import {
   ArrowLeft, Sun, Radio, Compass, Mountain, Layers, Play,
-  Pause, Sparkles, RefreshCw, Grid, Eye, Lightbulb, CheckCircle2
+  Pause, Sparkles, RefreshCw, Grid, Eye, Lightbulb, CheckCircle2,
+  SlidersHorizontal, X
 } from 'lucide-react';
 
 // Global in-memory cache for instant 0ms site switching
@@ -44,8 +45,9 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
   const [loading, setLoading] = useState(!terrainCache.has(site.id));
   const [telemetry, setTelemetry] = useState(null);
   const [exaggeration, setExaggeration] = useState(1.0); // 1.0 = Real 1:1 Physical Aspect Ratio
-  const [surfaceMode,setSurfaceMode]=useState('elevation');
-  const [terrainError,setTerrainError]=useState(null);
+  const [surfaceMode, setSurfaceMode] = useState('elevation');
+  const [terrainError, setTerrainError] = useState(null);
+  const [showInspector, setShowInspector] = useState(false);
 
   useEffect(()=>{
     let alive=true;setTerrainError(null);setLoading(true);setTerrainData(null);
@@ -392,135 +394,209 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
         </div>
       )}
 
-      {terrainError&&<div className="science-warning" role="alert">{terrainError}. Return to the globe or choose another region.</div>}
-      {/* Top Left: Back Button & Site Identity */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-3">
-        <button
-          onClick={onBack}
-          className="btn-ghost flex items-center gap-1.5 text-xs py-1.5 px-3 bg-[var(--paper-warm)]/90 backdrop-blur-md"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Moon Globe</span>
-        </button>
+      {terrainError && (
+        <div className="absolute top-16 left-4 right-4 z-30 science-warning" role="alert">
+          {terrainError}. Return to the globe or choose another region.
+        </div>
+      )}
 
-        <div className="bento-plate px-3.5 py-1.5 hidden sm:flex items-center gap-2 bg-[var(--paper-warm)]/90 backdrop-blur-md">
-          <span className="w-2 h-2 rounded-full bg-[var(--laser-crimson)] shadow-[0_0_8px_var(--laser-crimson)]" />
-          <span className="text-xs font-semibold text-[var(--ink)] tracking-wide">{site.name}</span>
-          <span className="text-[10px] text-[var(--ink-faint)] font-mono">({coordinateText(site)})</span>
+      {/* ── Top Unified Controls Bar ─────────────────── */}
+      <div className="absolute top-3 inset-x-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        {/* Top Left: Back Button & Site Identity */}
+        <div className="flex items-center gap-2 pointer-events-auto">
+          <button
+            onClick={onBack}
+            className="btn-ghost flex items-center gap-1.5 text-xs py-1.5 px-3 bg-[var(--paper-warm)]/90 backdrop-blur-md cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Moon Globe</span>
+          </button>
+
+          <div className="bento-plate px-3 py-1.5 flex items-center gap-2 bg-[var(--paper-warm)]/90 backdrop-blur-md">
+            <span className="w-2 h-2 rounded-full bg-[var(--laser-crimson)] shadow-[0_0_8px_var(--laser-crimson)]" />
+            <span className="text-xs font-semibold text-[var(--ink)] tracking-wide">{site.name}</span>
+            <span className="text-[10px] text-[var(--coral)] font-mono hidden sm:inline">({coordinateText(site)})</span>
+          </div>
         </div>
 
-        {/* 20 MPP Resolution Badge */}
-        <div className="hidden md:flex items-center gap-1.5 bento-plate px-3 py-1.5 text-xs font-mono bg-[var(--paper-warm)]/90 backdrop-blur-md text-[var(--ink-soft)]">
-          <CheckCircle2 className="w-3.5 h-3.5 text-[var(--emerald)]" />
-          <span>{terrainData?.metadata.nativeResolutionDescription??'Loading terrain metadata'}</span>
-        </div>
-      </div>
+        {/* Top Right: View Modes & Lighting Button */}
+        <div className="flex items-center gap-2 pointer-events-auto" data-guide="terrain-controls">
+          {/* LIGHTING BUTTON (Inspection fill) */}
+          <button
+            onClick={() => setLightingMode(!lightingMode)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all cursor-pointer ${
+              lightingMode
+                ? 'bg-[var(--coral)] text-[var(--paper-dark)] border-[var(--coral)] shadow-lg shadow-[rgba(255,171,94,0.25)]'
+                : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--ink-soft)]'
+            }`}
+            title="Lights up all terrain features so you can view permanently shadowed crater floors clearly"
+          >
+            <Lightbulb className={`w-3.5 h-3.5 ${lightingMode ? 'text-[var(--paper-dark)] fill-current' : 'text-[var(--coral)]'}`} />
+            <span>{lightingMode ? 'Lighting: ON' : 'Lighting: OFF'}</span>
+          </button>
 
-      {/* Top Right: View Modes & Lighting Button */}
-      <div className="absolute top-4 right-4 z-10 flex flex-wrap items-center gap-2" data-guide="terrain-controls">
-        {/* LIGHTING BUTTON (Inspection fill) */}
-        <button
-          onClick={() => setLightingMode(!lightingMode)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all ${
-            lightingMode
-              ? 'bg-[var(--coral)] text-[var(--paper-dark)] border-[var(--coral)] shadow-lg shadow-[rgba(255,171,94,0.25)]'
-              : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--ink-soft)]'
-          }`}
-          title="Lights up all terrain features so you can view permanently shadowed crater floors clearly"
-        >
-          <Lightbulb className={`w-3.5 h-3.5 ${lightingMode ? 'text-[var(--paper-dark)] fill-current' : 'text-[var(--coral)]'}`} />
-          <span>{lightingMode ? 'Lighting: ON' : 'Lighting: OFF'}</span>
-        </button>
+          {/* Dual Surface Toggle Button (Raw DEM vs Continuous Surface) */}
+          <button
+            onClick={() => setUseInterpolation(!useInterpolation)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all cursor-pointer ${
+              useInterpolation
+                ? 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--mustard)] border-[rgba(143,211,232,0.3)]'
+                : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--coral)] border-[rgba(255,171,94,0.3)]'
+            }`}
+            title="Switch between raw DEM grid and smooth bilinear mesh"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{useInterpolation ? 'Smooth Mesh' : 'Raw DEM'}</span>
+          </button>
 
-        {/* Dual Surface Toggle Button (Raw DEM vs Continuous Surface) */}
-        <button
-          onClick={() => setUseInterpolation(!useInterpolation)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all ${
-            useInterpolation
-              ? 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--mustard)] border-[rgba(143,211,232,0.3)] shadow-lg shadow-[rgba(143,211,232,0.1)]'
-              : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--coral)] border-[rgba(255,171,94,0.3)] shadow-lg shadow-[rgba(255,171,94,0.1)]'
-          }`}
-          title="Switch between the bundled source grid and a bilinear display mesh; subdivision adds no measured detail"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>{useInterpolation ? 'Bilinear display mesh' : 'Source grid'}</span>
-        </button>
+          {/* Inspector Panel Toggle Button */}
+          <button
+            onClick={() => setShowInspector(!showInspector)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all cursor-pointer ${
+              showInspector
+                ? 'bg-[var(--bone-active)] text-[var(--coral)] border-[var(--coral)]'
+                : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--ink-mute)]'
+            }`}
+            title="Adjust terrain vertical exaggeration and layer type"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Settings</span>
+          </button>
 
-        {/* Wireframe Mesh Toggle */}
-        <button
-          onClick={() => setWireframe(!wireframe)}
-          className={`p-1.5 rounded-lg text-xs font-medium backdrop-blur-md border transition-all ${
-            wireframe
-              ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
-              : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--ink-mute)]'
-          }`}
-          title="Toggle Wireframe Grid"
-        >
-          <Grid className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div className="absolute top-24 right-4 z-10 bento-plate p-3 terrain-inspector">
-        <label className="text-xs block">Surface layer <select aria-label="Terrain surface layer" value={surfaceMode} onChange={e=>setSurfaceMode(e.target.value)} className="bg-[#111820] border border-[#34434e] rounded p-1 ml-2"><option value="elevation">Elevation</option><option value="slope">Slope estimate</option><option value="texture">Legacy hillshade</option></select></label>
-        <label className="text-xs block mt-2">Visual exaggeration: {exaggeration}×<input aria-label="Terrain vertical exaggeration" type="range" min="1" max="5" step="0.5" value={exaggeration} onChange={e=>setExaggeration(Number(e.target.value))} className="w-full"/></label>
-        <p className="text-[10px] text-[var(--ink-mute)]">{surfaceMode==='slope'?'Cyan 0° → peach ≥30°. Source-limited estimate.':surfaceMode==='texture'?'Baked illumination; use elevation for dynamic lighting.':'Elevation color: low slate → high ivory.'}</p>
-        <button className="btn-ghost text-xs mt-2" onClick={()=>{const extent=Math.max(terrainData?.widthKm??10,terrainData?.heightKm??10);cameraRef.current.position.set(0,extent*.6,extent*.9);controlsRef.current.target.set(0,0,0);}}>Reset camera</button>
-        <p className="text-[9px] text-[var(--ink-mute)] mt-1">ENU north arrow · 1 scene unit = 1 km.<br/>Exaggeration affects visuals only. Registration unverified.</p>
-      </div>
-      {/* Bottom Left: Physical Terrain Metrics */}
-      <div className="absolute bottom-16 left-4 z-10 bento-plate p-3.5 max-w-xs text-xs space-y-2 bg-[var(--paper-warm)]/90 backdrop-blur-md">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-mono uppercase text-[var(--ink-faint)]">Elevation Relief</span>
-          <span className="font-mono font-bold text-[var(--emerald)]">
-            {terrainData ? `${terrainData.elevationSpanM.toLocaleString()} m` : 'Loading...'}
-          </span>
-        </div>
-        <div className="flex items-center justify-between text-[11px] text-[var(--ink-mute)]">
-          <span>Min: <span className="font-mono text-[var(--ink)]">{terrainData?.minElevationM}m</span></span>
-          <span>Max: <span className="font-mono text-[var(--ink)]">{terrainData?.maxElevationM}m</span></span>
-        </div>
-        <div className="pt-1.5 border-t border-[var(--line-soft)] flex items-center justify-between text-[10px] text-[var(--ink-faint)] font-mono">
-          <span>Scale & Grid:</span>
-          <span className="text-[var(--coral)]">
-            {terrainData?`${terrainData.widthKm.toFixed(2)} × ${terrainData.heightKm.toFixed(2)} km`:'…'}
-          </span>
+          {/* Wireframe Mesh Toggle */}
+          <button
+            onClick={() => setWireframe(!wireframe)}
+            className={`p-1.5 rounded-lg text-xs font-medium backdrop-blur-md border transition-all cursor-pointer ${
+              wireframe
+                ? 'bg-[var(--ink)] text-[var(--paper)] border-[var(--ink)]'
+                : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--ink-mute)]'
+            }`}
+            title="Toggle Wireframe Grid"
+          >
+            <Grid className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {/* Bottom Timeline Scrubber */}
-      <div className="absolute bottom-3 left-4 right-4 z-20 flex items-center gap-3 bento-plate px-4 py-2 bg-[var(--paper-warm)]/95 backdrop-blur-md">
-        <button
-          onClick={() => setIsPlaying(!isPlaying)}
-          className="btn-ghost text-xs font-mono font-bold px-2.5 py-1 text-[var(--coral)] border border-[rgba(255,171,94,0.3)] hover:bg-[rgba(255,171,94,0.1)]"
-        >
-          {isPlaying ? 'PAUSE' : 'PLAY'}
-        </button>
-
-        <span className="text-xs font-mono text-[var(--ink-soft)] min-w-[70px]">
-          {String(currentHour).padStart(2, '0')}:00 UTC
-        </span>
-
-        <input
-          type="range"
-          min="0"
-          max="23"
-          value={currentHour}
-          onChange={(e) => setCurrentHour(Number(e.target.value))}
-          className="flex-1 accent-[var(--coral)] h-1.5 bg-[var(--bone)] rounded-lg cursor-pointer"
-        />
-
-        {telemetry && (
-          <div className="hidden sm:flex items-center gap-4 text-xs font-mono">
-            <span className="flex items-center gap-1.5 text-[var(--coral)]">
-              <Sun className="w-3.5 h-3.5" />
-              <span>Sun: {telemetry.sun.alt.toFixed(1)}°</span>
+      {/* Floating Terrain Inspector (Tucked cleanly below top bar with close button) */}
+      {showInspector && (
+        <div className="absolute top-14 right-3 z-30 bento-plate p-4 max-w-xs w-72 bg-[var(--paper-warm)]/95 backdrop-blur-md border border-[var(--line)] shadow-2xl animate-fade-in space-y-3">
+          <div className="flex items-center justify-between border-b border-[var(--line-soft)] pb-2">
+            <span className="text-xs font-bold text-[var(--ink)] flex items-center gap-1.5">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--coral)]" />
+              Terrain Surface & Scale
             </span>
-            <span className="flex items-center gap-1.5 text-[var(--mustard)]">
-              <Radio className="w-3.5 h-3.5" />
-              <span>Earth: {telemetry.earth.alt.toFixed(1)}°</span>
+            <button
+              onClick={() => setShowInspector(false)}
+              className="text-[var(--ink-mute)] hover:text-white p-1 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <label className="text-xs block text-[var(--ink-mute)]">
+            <span>Surface Layer:</span>
+            <select
+              aria-label="Terrain surface layer"
+              value={surfaceMode}
+              onChange={(e) => setSurfaceMode(e.target.value)}
+              className="w-full bg-[#111820] border border-[#34434e] rounded-lg p-2 mt-1 text-xs text-[var(--ink)]"
+            >
+              <option value="elevation">Elevation Color Map</option>
+              <option value="slope">Slope Angle Estimate</option>
+              <option value="texture">Hillshade Texture</option>
+            </select>
+          </label>
+
+          <label className="text-xs block text-[var(--ink-mute)]">
+            <div className="flex justify-between">
+              <span>Vertical Exaggeration:</span>
+              <span className="font-mono text-[var(--coral)]">{exaggeration}×</span>
+            </div>
+            <input
+              aria-label="Terrain vertical exaggeration"
+              type="range"
+              min="1"
+              max="5"
+              step="0.5"
+              value={exaggeration}
+              onChange={(e) => setExaggeration(Number(e.target.value))}
+              className="w-full accent-[var(--coral)] mt-1 cursor-pointer"
+            />
+          </label>
+
+          <div className="pt-2 border-t border-[var(--line-soft)] flex items-center justify-between">
+            <button
+              className="btn-ghost text-xs py-1 px-3 cursor-pointer"
+              onClick={() => {
+                const extent = Math.max(terrainData?.widthKm ?? 10, terrainData?.heightKm ?? 10);
+                cameraRef.current.position.set(0, extent * 0.6, extent * 0.9);
+                controlsRef.current.target.set(0, 0, 0);
+              }}
+            >
+              Reset Camera
+            </button>
+            <span className="text-[10px] text-[var(--ink-faint)] font-mono">1 unit = 1 km</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bottom Unified HUD Dashboard (Elevation + Timeline) ─────────────────── */}
+      <div className="absolute bottom-3 inset-x-3 z-20 bento-plate p-3 bg-[var(--paper-warm)]/95 backdrop-blur-md border border-[var(--line)] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-3">
+        {/* Physical Terrain Elevation Metrics */}
+        <div className="flex flex-wrap items-center gap-3 text-xs w-full md:w-auto border-b md:border-b-0 border-[var(--line-soft)] pb-2 md:pb-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-mono uppercase text-[var(--ink-faint)]">Relief:</span>
+            <span className="font-mono font-bold text-[var(--emerald)]">
+              {terrainData ? `${terrainData.elevationSpanM.toLocaleString()} m` : 'Loading...'}
             </span>
           </div>
-        )}
+          <span className="text-[var(--line)] hidden sm:inline">|</span>
+          <div className="text-[11px] text-[var(--ink-mute)] flex items-center gap-2">
+            <span>Min: <b className="font-mono text-[var(--ink)]">{terrainData?.minElevationM ?? '…'}m</b></span>
+            <span>Max: <b className="font-mono text-[var(--ink)]">{terrainData?.maxElevationM ?? '…'}m</b></span>
+          </div>
+          <span className="text-[var(--line)] hidden sm:inline">|</span>
+          <div className="text-[10px] text-[var(--ink-faint)] font-mono">
+            Grid: <span className="text-[var(--coral)]">{terrainData ? `${terrainData.widthKm.toFixed(1)} × ${terrainData.heightKm.toFixed(1)} km` : '…'}</span>
+          </div>
+        </div>
+
+        {/* Timeline Scrubber & Live Telemetry */}
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <button
+            onClick={() => setIsPlaying(!isPlaying)}
+            className="btn-ghost text-xs font-mono font-bold px-2.5 py-1 text-[var(--coral)] border border-[rgba(255,171,94,0.3)] hover:bg-[rgba(255,171,94,0.1)] cursor-pointer"
+          >
+            {isPlaying ? 'PAUSE' : 'PLAY'}
+          </button>
+
+          <span className="text-xs font-mono text-[var(--ink-soft)] min-w-[70px]">
+            {String(currentHour).padStart(2, '0')}:00 UTC
+          </span>
+
+          <input
+            type="range"
+            min="0"
+            max="23"
+            value={currentHour}
+            onChange={(e) => setCurrentHour(Number(e.target.value))}
+            className="flex-1 md:w-44 accent-[var(--coral)] h-1.5 bg-[var(--bone)] rounded-lg cursor-pointer"
+          />
+
+          {telemetry && (
+            <div className="hidden lg:flex items-center gap-3 text-xs font-mono pl-2 border-l border-[var(--line-soft)]">
+              <span className="flex items-center gap-1 text-[var(--coral)]">
+                <Sun className="w-3.5 h-3.5" />
+                <span>Sun: {telemetry.sun.alt.toFixed(1)}°</span>
+              </span>
+              <span className="flex items-center gap-1 text-[var(--mustard)]">
+                <Radio className="w-3.5 h-3.5" />
+                <span>Earth: {telemetry.earth.alt.toFixed(1)}°</span>
+              </span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
