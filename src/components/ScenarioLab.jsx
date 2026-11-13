@@ -4,7 +4,7 @@ import sites from '../data/sites.json';
 import { useScience } from './ScienceProvider.jsx';
 import { requestScenarios } from '../lib/scienceClient.js';
 import ScenarioDiagnostics from './ScenarioDiagnostics.jsx';
-import { Sparkles, Calendar, Clock, Sun, Radio, ArrowRight, RefreshCw } from 'lucide-react';
+import { Calendar, Clock, Sun, Radio, ArrowRight, RefreshCw } from 'lucide-react';
 import gsap from 'gsap';
 
 const shift = (date, days) =>
@@ -108,11 +108,11 @@ export default function ScenarioLab({ pins, setPins }) {
         {pins.map((pin, i) => (
           <div
             key={i}
-            className="p-4 rounded-xl bg-[var(--paper-dark)] border border-[var(--line-soft)] space-y-3"
+            className="p-4 rounded-md bg-[var(--paper)] border border-[var(--line)] space-y-3"
           >
             <div className="flex items-center justify-between">
-              <span className={`text-xs font-bold uppercase tracking-wider ${i === 0 ? 'text-[var(--coral)]' : 'text-[var(--mustard)]'}`}>
-                Plan {i === 0 ? 'A (Baseline)' : 'B (Alternate / Delay)'}
+              <span className={`text-xs font-medium ${i === 0 ? 'text-[var(--coral)]' : 'text-[var(--mustard)]'}`}>
+                Plan {i === 0 ? 'A (Baseline)' : 'B (Alternate / delay)'}
               </span>
               <button
                 type="button"

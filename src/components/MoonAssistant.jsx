@@ -4,7 +4,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import {answerGuideQuestion} from '../lib/projectGuideTools.js';
-import { Bot, Send, X, Sparkles, Trash2, MessageCircle } from 'lucide-react';
+import { Bot, Send, X, Trash2, MessageCircle } from 'lucide-react';
 
 const SUGGESTED_QUESTIONS = [
   "What if landing is delayed by 3 days?",
@@ -52,20 +52,20 @@ export default function MoonAssistant({ site, date, power, comm, embedded = fals
     return (
       <div className="bento-plate flex flex-col" style={{ minHeight: 'calc(100vh - 180px)' }}>
         {/* Header */}
-        <div className="p-5 border-b border-[var(--line-soft)] flex items-center justify-between">
+        <div className="p-4 border-b border-[var(--line-soft)] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[rgba(255,171,94,0.12)] border border-[rgba(255,171,94,0.3)] flex items-center justify-center">
-              <Bot className="w-5 h-5 text-[var(--coral)]" />
+            <div className="w-9 h-9 rounded-md bg-[var(--paper)] border border-[var(--line)] flex items-center justify-center">
+              <Bot className="w-4 h-4 text-[var(--coral)]" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="font-bold text-[var(--ink)] font-sans">Awilix Mission Assistant</h2>
-                <span className="telemetry-chip terrain text-[10px] py-0.5 px-2">
-                  Local scenario tools
+                <h2 className="font-medium text-sm text-[var(--ink)] font-sans">Mission assistant</h2>
+                <span className="telemetry-chip terrain text-[10px] py-0.5 px-1.5">
+                  Local analysis
                 </span>
               </div>
               <p className="text-xs text-[var(--ink-mute)] font-sans">
-                Project knowledge and local calculations · no cloud model connected
+                Local calculations and NASA mission knowledge · no external model required
               </p>
             </div>
           </div>
@@ -73,7 +73,7 @@ export default function MoonAssistant({ site, date, power, comm, embedded = fals
           {messages.length > 0 && (
             <button
               onClick={() => setMessages([])}
-              className="p-2 rounded-lg text-[var(--ink-mute)] hover:text-[var(--crimson)] hover:bg-white/5 transition-colors"
+              className="p-1.5 rounded-md text-[var(--ink-mute)] hover:text-[var(--crimson)] hover:bg-white/5 transition-colors"
               title="Clear transcript"
             >
               <Trash2 className="w-4 h-4" />
@@ -82,34 +82,30 @@ export default function MoonAssistant({ site, date, power, comm, embedded = fals
         </div>
 
         {/* Message Stream */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 && (
-            <div className="space-y-6 py-6 text-center max-w-xl mx-auto">
-              <div className="w-12 h-12 rounded-full border border-[var(--line)] bg-[var(--paper-dark)] flex items-center justify-center mx-auto text-xl text-[var(--coral)]">
-                ☾
-              </div>
+            <div className="space-y-5 py-6 text-center max-w-xl mx-auto">
               <div>
-                <h3 className="text-base font-bold text-[var(--ink)] font-sans mb-1">
+                <h3 className="text-sm font-medium text-[var(--ink)] font-sans mb-1">
                   How can I assist your mission planning?
                 </h3>
                 <p className="text-xs text-[var(--ink-mute)] font-sans leading-relaxed">
                   Ask about solar grazing angles, line-of-sight communication with NASA DSN,
-                  topographic relief from LOLA LDEM, or candidate landing site science.
+                  topographic relief from LOLA altimetry, or candidate landing site parameters.
                 </p>
               </div>
 
               <div className="space-y-2 text-left">
-                <div className="text-[10px] font-mono uppercase text-[var(--ink-faint)] text-center">
-                  Recommended Inquiries
+                <div className="text-[11px] font-mono text-[var(--ink-faint)] text-center">
+                  Recommended inquiries
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {SUGGESTED_QUESTIONS.map((q, i) => (
                     <button
                       key={i}
                       onClick={() => sendMessage(q)}
-                      className="text-left p-3 rounded-xl bg-[var(--paper-dark)] border border-[var(--line-soft)] text-xs text-[var(--ink-soft)] hover:border-[var(--coral)] hover:text-white transition-colors cursor-pointer"
+                      className="text-left p-2.5 rounded-md bg-[var(--paper)] border border-[var(--line-soft)] text-xs text-[var(--ink-soft)] hover:border-[var(--coral)] hover:text-white transition-colors cursor-pointer"
                     >
-                      <Sparkles className="w-3 h-3 text-[var(--coral)] inline mr-2" />
                       {q}
                     </button>
                   ))}

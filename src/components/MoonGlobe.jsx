@@ -717,62 +717,62 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick, ephemerisRe
         {/* Left Side: Scale Mode & Target Focus Anchors */}
         <div className="flex flex-wrap items-center gap-2 pointer-events-auto">
           {/* Scale Mode Selector Button */}
-          <div className="flex items-center gap-1 bg-[#0a0e17]/90 backdrop-blur-md p-1 rounded-xl border border-[var(--line)]">
+          <div className="flex items-center gap-1 bg-[var(--paper)] p-0.5 rounded-md border border-[var(--line)]">
             <button
               onClick={() => setScaleMode('proportional')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
+              className={`px-2 py-0.5 rounded text-xs font-mono transition-colors cursor-pointer ${
                 scaleMode === 'proportional'
-                  ? 'bg-[var(--mustard)] text-[#060910] font-semibold shadow-sm'
+                  ? 'bg-[var(--coral)] text-[#120e07] font-medium'
                   : 'text-[var(--ink-mute)] hover:text-white'
               }`}
-              title="Proportional View: Earth (3.67x diameter) and Sun prominently visible in background"
+              title="Proportional View: Earth and Sun visible in background"
             >
               Proportional
             </button>
             <button
               onClick={() => setScaleMode('true')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors cursor-pointer ${
+              className={`px-2 py-0.5 rounded text-xs font-mono transition-colors cursor-pointer ${
                 scaleMode === 'true'
-                  ? 'bg-[var(--coral)] text-[#120e07] font-semibold shadow-sm'
+                  ? 'bg-[var(--coral)] text-[#120e07] font-medium'
                   : 'text-[var(--ink-mute)] hover:text-white'
               }`}
-              title="1:1 True NASA Scale: Earth at 384,400 km, Sun at 149.6M km"
+              title="1:1 True NASA Scale"
             >
-              1:1 NASA
+              1:1 scale
             </button>
             <button
               onClick={() => setShowScaleDetails(!showScaleDetails)}
               className="p-1 text-[var(--ink-faint)] hover:text-white rounded cursor-pointer"
-              title="Toggle NASA scientific dimensions specification"
+              title="NASA dimensions specification"
             >
               <Info className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Quick Camera Navigation Anchors */}
-          <div className="flex items-center gap-1 bg-[#0a0e17]/85 backdrop-blur-md p-0.5 rounded-lg border border-[var(--line-soft)] text-[11px] font-mono">
+          <div className="flex items-center gap-1 bg-[var(--paper)] p-0.5 rounded-md border border-[var(--line)] text-[11px] font-mono">
             <span className="text-[var(--ink-faint)] px-1.5 text-[10px]">Target:</span>
             <button
               onClick={() => handleFocus('moon')}
-              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${focusTarget === 'moon' ? 'bg-white/15 text-white font-bold' : 'text-[var(--ink-mute)] hover:text-white'}`}
+              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${focusTarget === 'moon' ? 'bg-[var(--bone-active)] text-white' : 'text-[var(--ink-mute)] hover:text-white'}`}
             >
               Moon
             </button>
             <button
               onClick={() => handleFocus('earth')}
-              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${focusTarget === 'earth' ? 'bg-[var(--mustard)] text-[#060910] font-bold' : 'text-[var(--ink-mute)] hover:text-white'}`}
+              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${focusTarget === 'earth' ? 'bg-[var(--mustard)] text-[#060910] font-medium' : 'text-[var(--ink-mute)] hover:text-white'}`}
             >
               Earth
             </button>
             <button
               onClick={() => handleFocus('sun')}
-              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${focusTarget === 'sun' ? 'bg-[var(--coral)] text-[#120e07] font-bold' : 'text-[var(--ink-mute)] hover:text-white'}`}
+              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${focusTarget === 'sun' ? 'bg-[var(--coral)] text-[#120e07] font-medium' : 'text-[var(--ink-mute)] hover:text-white'}`}
             >
               Sun
             </button>
             <button
               onClick={() => handleFocus('system')}
-              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${focusTarget === 'system' ? 'bg-white/20 text-white font-bold' : 'text-[var(--ink-mute)] hover:text-white'}`}
+              className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${focusTarget === 'system' ? 'bg-[var(--bone-active)] text-white' : 'text-[var(--ink-mute)] hover:text-white'}`}
             >
               System
             </button>
@@ -780,36 +780,36 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick, ephemerisRe
         </div>
 
         {/* Right Side: Vector Field Toggles */}
-        <div className="flex items-center gap-1 bg-[#0a0e17]/85 backdrop-blur-md p-1 rounded-xl border border-[var(--line)] pointer-events-auto text-xs">
+        <div className="flex items-center gap-1 bg-[var(--paper)] p-0.5 rounded-md border border-[var(--line)] pointer-events-auto text-xs">
           <span className="text-[10px] text-[var(--ink-faint)] font-mono px-1">Vectors:</span>
           <button
             onClick={() => setVectorMode('all')}
-            className={`px-2 py-0.5 rounded-lg text-[11px] font-sans font-medium transition-colors cursor-pointer ${
-              vectorMode === 'all' ? 'bg-[var(--coral)] text-[#120e07] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
+            className={`px-2 py-0.5 rounded text-[11px] font-sans transition-colors cursor-pointer ${
+              vectorMode === 'all' ? 'bg-[var(--coral)] text-[#120e07] font-medium' : 'text-[var(--ink-mute)] hover:text-white'
             }`}
           >
             All
           </button>
           <button
             onClick={() => setVectorMode('dte')}
-            className={`px-2 py-0.5 rounded-lg text-[11px] font-sans font-medium transition-colors cursor-pointer ${
-              vectorMode === 'dte' ? 'bg-[var(--mustard)] text-[#060910] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
+            className={`px-2 py-0.5 rounded text-[11px] font-sans transition-colors cursor-pointer ${
+              vectorMode === 'dte' ? 'bg-[var(--mustard)] text-[#060910] font-medium' : 'text-[var(--ink-mute)] hover:text-white'
             }`}
           >
             Earth LOS
           </button>
           <button
             onClick={() => setVectorMode('solar')}
-            className={`px-2 py-0.5 rounded-lg text-[11px] font-sans font-medium transition-colors cursor-pointer ${
-              vectorMode === 'solar' ? 'bg-[var(--coral)] text-[#120e07] font-semibold' : 'text-[var(--ink-mute)] hover:text-white'
+            className={`px-2 py-0.5 rounded text-[11px] font-sans transition-colors cursor-pointer ${
+              vectorMode === 'solar' ? 'bg-[var(--coral)] text-[#120e07] font-medium' : 'text-[var(--ink-mute)] hover:text-white'
             }`}
           >
-            Sun Rays
+            Sun rays
           </button>
           <button
             onClick={() => setVectorMode('off')}
-            className={`px-2 py-0.5 rounded-lg text-[11px] font-sans font-medium transition-colors cursor-pointer ${
-              vectorMode === 'off' ? 'bg-white/20 text-white' : 'text-[var(--ink-mute)] hover:text-white'
+            className={`px-2 py-0.5 rounded text-[11px] font-sans transition-colors cursor-pointer ${
+              vectorMode === 'off' ? 'bg-[var(--bone-active)] text-white' : 'text-[var(--ink-mute)] hover:text-white'
             }`}
           >
             Off
@@ -817,40 +817,40 @@ export default function MoonGlobe({ selectedSite, date, onSiteClick, ephemerisRe
         </div>
       </div>
 
-      {/* Expandable Scientific Dimensions Card (Positioned safely below top bar) */}
+      {/* Expandable Scientific Dimensions Card */}
       {showScaleDetails && (
-        <div className="absolute top-14 left-3 z-30 bento-plate p-3.5 max-w-sm text-xs font-mono space-y-2 animate-fade-in shadow-2xl bg-[#0a0e17]/95 backdrop-blur-md pointer-events-auto">
+        <div className="absolute top-14 left-3 z-30 bento-plate p-3 max-w-sm text-xs font-mono space-y-2 animate-fade-in bg-[var(--bone)] pointer-events-auto">
           <div className="flex items-center justify-between border-b border-[var(--line-soft)] pb-1.5">
-            <span className="text-[var(--coral)] font-bold">NASA Scientific Measurement Datum</span>
+            <span className="text-[var(--coral)] font-medium">NASA dimension datum</span>
             <button onClick={() => setShowScaleDetails(false)} className="text-[var(--ink-faint)] hover:text-white cursor-pointer">✕</button>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div className="grid grid-cols-2 gap-2 text-[11px] tabular-nums">
             <div>
-              <span className="text-[var(--ink-faint)] block text-[10px]">Earth / Moon Diam:</span>
-              <span className="text-[var(--ink)] font-bold">3.667 : 1</span>
+              <span className="text-[var(--ink-faint)] block text-[10px]">Earth / Moon diam:</span>
+              <span className="text-[var(--ink)]">3.667 : 1</span>
             </div>
             <div>
-              <span className="text-[var(--ink-faint)] block text-[10px]">Earth / Moon Vol:</span>
-              <span className="text-[var(--mustard)] font-bold">49.30 : 1</span>
+              <span className="text-[var(--ink-faint)] block text-[10px]">Earth / Moon vol:</span>
+              <span className="text-[var(--mustard)]">49.30 : 1</span>
             </div>
             <div>
-              <span className="text-[var(--ink-faint)] block text-[10px]">Sun / Moon Diam:</span>
-              <span className="text-[var(--ink)] font-bold">400.8 : 1</span>
+              <span className="text-[var(--ink-faint)] block text-[10px]">Sun / Moon diam:</span>
+              <span className="text-[var(--ink)]">400.8 : 1</span>
             </div>
             <div>
-              <span className="text-[var(--ink-faint)] block text-[10px]">Sun / Moon Vol:</span>
-              <span className="text-[var(--coral)] font-bold">64.3M : 1</span>
+              <span className="text-[var(--ink-faint)] block text-[10px]">Sun / Moon vol:</span>
+              <span className="text-[var(--coral)]">64.3M : 1</span>
             </div>
           </div>
           <div className="pt-1.5 border-t border-[var(--line-soft)] text-[10px] text-[var(--ink-mute)] leading-relaxed">
-            Earth-Moon: 384,400 km (30.2 Earth diams) · Sun-Moon: 149.6M km (1.000 AU). Rendered with logarithmic depth buffers.
+            Earth-Moon: 384,400 km (30.2 Earth diams) · Sun-Moon: 149.6M km (1.000 AU).
           </div>
         </div>
       )}
 
       {/* ── Bottom: Live Astronomical Telemetry & Time Scrubber ── */}
-      <div className="absolute bottom-4 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-3 bg-[#0a0e17]/90 backdrop-blur-md border border-[var(--line)] rounded-xl px-4 py-2.5 sm:px-5 sm:py-3 pointer-events-auto shadow-2xl overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 text-xs font-telemetry min-w-0">
+      <div className="absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-3 bg-[var(--paper)] border border-[var(--line)] rounded-md px-3 py-2 pointer-events-auto overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3 text-xs font-telemetry tabular-nums min-w-0">
           <div className="flex items-center gap-1.5 text-[var(--coral)] whitespace-nowrap">
             <Sun className="w-3.5 h-3.5 flex-shrink-0" />
             <span>{(telemetry.sunDistKm / 1000000).toFixed(2)}M km</span>

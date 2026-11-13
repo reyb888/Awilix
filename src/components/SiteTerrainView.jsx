@@ -14,7 +14,7 @@ import { coordinateText } from '../lib/mascotKnowledge.js';
 import sites from '../data/sites.json';
 import {
   ArrowLeft, Sun, Radio, Compass, Mountain, Layers, Play,
-  Pause, Sparkles, RefreshCw, Grid, Eye, Lightbulb, CheckCircle2,
+  Pause, RefreshCw, Grid, Eye, Lightbulb, CheckCircle2,
   SlidersHorizontal, X
 } from 'lucide-react';
 
@@ -537,15 +537,15 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
               DEM
             </div>
           </div>
-          <div className="text-xs font-mono font-bold text-[var(--ink)] tracking-widest uppercase">
-            Loading masked terrain crop
+          <div className="text-xs font-mono font-medium text-[var(--ink)]">
+            Loading terrain elevation grid
           </div>
           <div className="text-[11px] font-mono text-[var(--mustard)] mt-1 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[var(--laser-crimson)] animate-ping" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--coral)]" />
             <span>{site.name} · ({coordinateText(site)})</span>
           </div>
           <div className="text-[10px] font-mono text-[var(--ink-faint)] mt-1.5">
-            Source resolution and registration are shown in Data & accuracy
+            Source resolution and registration are shown in Data and sources
           </div>
         </div>
       )}
@@ -562,15 +562,15 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
         <div className="flex items-center gap-2 pointer-events-auto">
           <button
             onClick={onBack}
-            className="btn-ghost flex items-center gap-1.5 text-xs py-1.5 px-3 bg-[var(--paper-warm)]/90 backdrop-blur-md cursor-pointer"
+            className="btn-ghost flex items-center gap-1.5 text-xs py-1.5 px-3 bg-[var(--paper)] cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Moon Globe</span>
+            <span>Moon globe</span>
           </button>
 
-          <div className="bento-plate px-3 py-1.5 flex items-center gap-2 bg-[var(--paper-warm)]/90 backdrop-blur-md">
-            <span className="w-2 h-2 rounded-full bg-[var(--laser-crimson)] shadow-[0_0_8px_var(--laser-crimson)]" />
-            <span className="text-xs font-semibold text-[var(--ink)] tracking-wide">{site.name}</span>
+          <div className="bento-plate px-3 py-1.5 flex items-center gap-2 bg-[var(--paper)]">
+            <span className="w-2 h-2 rounded-full bg-[var(--coral)]" />
+            <span className="text-xs font-medium text-[var(--ink)]">{site.name}</span>
             <span className="text-[10px] text-[var(--coral)] font-mono hidden sm:inline">({coordinateText(site)})</span>
           </div>
         </div>
@@ -711,22 +711,22 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
       )}
 
       {/* ── Bottom Unified HUD Dashboard (Elevation + Timeline) ─────────────────── */}
-      <div className="absolute bottom-4 left-4 right-4 z-20 bento-plate px-4 py-2.5 sm:px-5 sm:py-3 bg-[var(--paper-warm)]/95 backdrop-blur-md border border-[var(--line)] shadow-2xl flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-xl">
+      <div className="absolute bottom-3 left-3 right-3 z-20 bento-plate px-3 py-2 bg-[var(--paper)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-md">
         {/* Physical Terrain Elevation Metrics */}
-        <div className="flex flex-wrap items-center gap-3 text-xs w-full lg:w-auto border-b lg:border-b-0 border-[var(--line-soft)] pb-2 lg:pb-0 min-w-0">
+        <div className="flex flex-wrap items-center gap-3 text-xs w-full lg:w-auto border-b lg:border-b-0 border-[var(--line-soft)] pb-2 lg:pb-0 min-w-0 font-mono tabular-nums">
           <div className="flex items-center gap-1.5 whitespace-nowrap">
-            <span className="text-[10px] font-mono uppercase text-[var(--ink-faint)]">Relief:</span>
-            <span className="font-mono font-bold text-[var(--emerald)]">
+            <span className="text-[11px] text-[var(--ink-mute)]">Relief:</span>
+            <span className="font-medium text-[var(--emerald)]">
               {terrainData?.elevationSpanM != null ? `${terrainData.elevationSpanM.toLocaleString()} m` : 'Loading...'}
             </span>
           </div>
           <span className="text-[var(--line)] hidden sm:inline">|</span>
           <div className="text-[11px] text-[var(--ink-mute)] flex items-center gap-2 whitespace-nowrap">
-            <span>Min: <b className="font-mono text-[var(--ink)]">{terrainData?.minElevationM != null ? `${terrainData.minElevationM}m` : '…'}</b></span>
-            <span>Max: <b className="font-mono text-[var(--ink)]">{terrainData?.maxElevationM != null ? `${terrainData.maxElevationM}m` : '…'}</b></span>
+            <span>Min: <span className="text-[var(--ink)]">{terrainData?.minElevationM != null ? `${terrainData.minElevationM}m` : '…'}</span></span>
+            <span>Max: <span className="text-[var(--ink)]">{terrainData?.maxElevationM != null ? `${terrainData.maxElevationM}m` : '…'}</span></span>
           </div>
           <span className="text-[var(--line)] hidden sm:inline">|</span>
-          <div className="text-[10px] text-[var(--ink-faint)] font-mono whitespace-nowrap">
+          <div className="text-[10px] text-[var(--ink-faint)] whitespace-nowrap">
             Grid: <span className="text-[var(--coral)]">{terrainData?.widthKm != null ? `${terrainData.widthKm.toFixed(1)} × ${terrainData.heightKm.toFixed(1)} km` : '…'}</span>
           </div>
         </div>
@@ -735,9 +735,9 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
         <div className="flex items-center gap-2.5 min-w-0 flex-1 lg:flex-initial justify-end">
           <button
             onClick={() => setIsPlaying(!isPlaying)}
-            className="btn-ghost text-xs font-mono font-bold px-2.5 py-1 text-[var(--coral)] border border-[rgba(255,171,94,0.3)] hover:bg-[rgba(255,171,94,0.1)] cursor-pointer flex-shrink-0"
+            className="btn-ghost text-xs font-mono px-2.5 py-1 text-[var(--coral)] border border-[var(--line)] hover:bg-[var(--bone)] cursor-pointer flex-shrink-0"
           >
-            {isPlaying ? 'PAUSE' : 'PLAY'}
+            {isPlaying ? 'Pause' : 'Play'}
           </button>
 
           <span className="text-xs font-mono text-[var(--ink-soft)] whitespace-nowrap font-medium min-w-[65px]">

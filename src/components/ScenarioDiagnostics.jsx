@@ -27,7 +27,7 @@ function WindowStrip({ stats, label, color, start, icon: Icon }) {
       </div>
 
       <div
-        className="science-strip h-3 rounded-full overflow-hidden relative bg-[var(--paper-dark)] border border-[var(--line-soft)]"
+        className="science-strip h-2.5 rounded-sm overflow-hidden relative bg-[var(--paper)] border border-[var(--line-soft)]"
         role="img"
         aria-label={`${label}: ${formatNum(stats.exactHours)} hours`}
       >

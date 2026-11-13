@@ -25,24 +25,24 @@ export default function ScienceControls({ scenario, site, onSelectSite }) {
       {/* Top compact bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--line-soft)]">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-[rgba(234,193,139,0.12)] border border-[rgba(234,193,139,0.25)] flex items-center justify-center text-[var(--coral)]">
+          <div className="w-7 h-7 rounded-md bg-[var(--paper)] border border-[var(--line)] flex items-center justify-center text-[var(--coral)]">
             <Compass className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold font-sans text-[var(--ink)]">
-                Lunar South Pole Simulation
+              <h2 className="text-sm font-medium font-sans text-[var(--ink)]">
+                Lunar south pole simulation
               </h2>
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
                 loading 
-                  ? 'border-[var(--coral)] text-[var(--coral)] bg-[rgba(234,193,139,0.1)]' 
-                  : 'border-[var(--mustard)] text-[var(--mustard)] bg-[rgba(145,198,212,0.1)]'
+                  ? 'border-[var(--coral)] text-[var(--coral)] bg-[var(--paper)]' 
+                  : 'border-[var(--mustard)] text-[var(--mustard)] bg-[var(--paper)]'
               }`}>
-                {loading ? 'Calculating…' : 'NASA Ephemeris Active'}
+                {loading ? 'Calculating…' : 'NASA ephemeris active'}
               </span>
             </div>
             <p className="text-[11px] text-[var(--ink-mute)] font-sans">
-              Calculates real sunlight hours and direct Earth radio visibility for {date} ({hours} hours)
+              Real sunlight hours and direct Earth radio visibility for {date} ({hours}h)
             </p>
           </div>
         </div>
@@ -51,10 +51,10 @@ export default function ScienceControls({ scenario, site, onSelectSite }) {
           <button
             type="button"
             onClick={() => setShowSettings(!showSettings)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--line)] bg-[var(--bone)] hover:bg-[var(--bone-hover)] text-xs text-[var(--ink-soft)] transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-[var(--line)] bg-[var(--bone)] hover:bg-[var(--bone-hover)] text-xs text-[var(--ink-soft)] transition-colors cursor-pointer"
           >
             <SlidersHorizontal className="w-3 h-3 text-[var(--coral)]" />
-            <span>{showSettings ? 'Hide Panel Setup' : 'Lander Equipment'}</span>
+            <span>{showSettings ? 'Hide setup' : 'Lander equipment'}</span>
           </button>
         </div>
       </div>

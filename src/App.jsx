@@ -22,7 +22,7 @@ import { coordinateText } from './lib/mascotKnowledge.js';
 import gsap from 'gsap';
 import {
   Globe, Mountain, BarChart3, GitCompare, Bot,
-  Sun, Radio, Zap, Sparkles, MapPin, ArrowRight,
+  Sun, Radio, Zap, MapPin, ArrowRight,
   CheckCircle2, Eye, Clock, Compass, Layers, Award,
   X, ExternalLink
 } from 'lucide-react';
@@ -308,14 +308,6 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
 
   return (
     <div className="app-shell" aria-busy={science.loading}>
-      {/* Fixed Architectural Side Rails */}
-      <div className="side-rail left">
-        <span className="rail-text">Sunlight · Earth Contact · South Pole 2026</span>
-      </div>
-      <div className="side-rail right">
-        <span className="rail-text">Awilix — Lunar South Pole Navigator</span>
-      </div>
-
       {/* Main Sticky Navbar */}
       <Navbar
         activeTab={activeTab}
@@ -331,35 +323,18 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
         onSelectPreset={handleSelectPreset}
       />
 
-      {/* Surface Ticker Wire (6 South Pole Candidate Sites) */}
-      <div className="ticker-wire">
-        <div className="ticker-track">
-          {[...sites, ...sites].map((s, idx) => (
-            <button
-              key={`${s.id}-${idx}`}
-              onClick={() => setSelectedSite(s)}
-              className="ticker-item cursor-pointer"
-            >
-              <span className="ticker-dot" />
-              <span className="text-[var(--ink)] font-semibold">{s.name}</span>
-              <span>({coordinateText(s)})</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Mobile / Tablet Horizontal Site Selector (shown when sidebar is hidden) */}
-      <div className="lg:hidden px-4 py-2.5 border-b border-[var(--line-soft)] bg-[var(--paper-warm)] flex items-center gap-2 overflow-x-auto max-w-full">
-        <span className="text-[10px] font-mono uppercase text-[var(--coral)] whitespace-nowrap">
+      <div className="lg:hidden px-4 py-2 border-b border-[var(--line-soft)] bg-[var(--paper)] flex items-center gap-2 overflow-x-auto max-w-full">
+        <span className="text-[11px] font-mono text-[var(--coral)] whitespace-nowrap">
           Site:
         </span>
         {sites.map((s) => (
           <button
             key={s.id}
             onClick={() => setSelectedSite(s)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-sans whitespace-nowrap transition-colors cursor-pointer border ${
+            className={`px-2.5 py-1 rounded text-xs font-sans whitespace-nowrap transition-colors cursor-pointer border ${
               selectedSite.id === s.id
-                ? 'bg-[var(--bone)] border-[var(--coral)] text-[var(--coral)] font-semibold'
+                ? 'bg-[var(--bone-hover)] border-[var(--coral)] text-[var(--coral)] font-medium'
                 : 'bg-transparent border-transparent text-[var(--ink-mute)] hover:text-white'
             }`}
           >
@@ -376,11 +351,11 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
           <div className="flex items-center justify-between pb-2 border-b border-[var(--line-soft)] flex-shrink-0">
             <div className="flex items-center gap-2">
               <MapPin className="w-3.5 h-3.5 text-[var(--coral)]" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--ink)]">
-                South Pole Sites
+              <span className="text-xs font-medium text-[var(--ink)]">
+                South pole sites
               </span>
             </div>
-            <span className="text-[10px] font-mono text-[var(--coral)]">{sites.length} sites</span>
+            <span className="text-[10px] font-mono tabular-nums text-[var(--coral)]">{sites.length} sites</span>
           </div>
 
           {/* Scrollable Sites List */}
@@ -446,15 +421,15 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
                     <div className="bento-plate-header">
                       <div className="flex items-center gap-2">
                         <Globe className="w-4 h-4 text-[var(--coral)]" />
-                        <span className="text-xs font-semibold text-[var(--ink)] tracking-wide">
-                          Interactive 3D Moon Globe · Click any beacon to explore
+                        <span className="text-xs font-medium text-[var(--ink)]">
+                          3D Moon globe · Local illumination and Earth line of sight
                         </span>
                       </div>
                       <button
                         onClick={() => handleVisitSite(selectedSite)}
-                        className="btn-primary text-xs py-1 px-3"
+                        className="btn-primary text-xs py-1.5 px-3"
                       >
-                        <span>Visit 3D Terrain</span>
+                        <span>Launch 3D terrain</span>
                         <ArrowRight className="w-3 h-3" />
                       </button>
                     </div>
@@ -501,14 +476,13 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
                       </div>
 
                       {/* Active Mission / Context Badge */}
-                      <div className="p-2.5 rounded-lg bg-[rgba(234,193,139,0.08)] border border-[rgba(234,193,139,0.2)] text-xs text-[var(--coral)] flex items-start gap-2">
-                        <Sparkles className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <div className="p-2.5 rounded-md bg-[var(--paper)] border border-[var(--line)] text-xs text-[var(--ink-soft)] flex items-start gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold leading-snug">
+                          <div className="font-medium text-[var(--coral)] leading-snug">
                             {selectedSite.mission?.split('(')[0]?.trim() || selectedSite.mission}
                           </div>
-                          <div className="text-[10px] text-[var(--ink-mute)] font-mono mt-0.5">
-                            Target Date: <strong className="text-[var(--ink)]">{date} UTC</strong> · {selectedSite.contractor}
+                          <div className="text-[10px] text-[var(--ink-mute)] font-mono tabular-nums mt-0.5">
+                            Target: <strong className="text-[var(--ink)] font-normal">{date} UTC</strong> · {selectedSite.contractor}
                           </div>
                         </div>
                       </div>
@@ -518,26 +492,26 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
                       </p>
 
                       {selectedSite.funFact && (
-                        <div className="p-2.5 rounded-lg bg-[var(--paper-dark)] border border-[var(--line-soft)] text-xs text-[var(--ink-mute)] italic leading-relaxed">
-                          "{selectedSite.funFact}"
+                        <div className="p-2.5 rounded-md bg-[var(--paper)] border border-[var(--line-soft)] text-xs text-[var(--ink-mute)] leading-relaxed">
+                          {selectedSite.funFact}
                         </div>
                       )}
 
-                      <div className="pt-2 border-t border-[var(--line-soft)] flex items-center justify-between text-xs font-mono">
-                        <span className="text-[var(--ink-faint)]">Water Ice Potential:</span>
-                        <span className="text-[var(--coral)] font-semibold">{selectedSite.waterIcePotential?.split('(')[0]?.trim() || 'High'}</span>
+                      <div className="pt-2 border-t border-[var(--line-soft)] flex items-center justify-between text-xs font-mono tabular-nums">
+                        <span className="text-[var(--ink-faint)]">Water ice potential:</span>
+                        <span className="text-[var(--coral)] font-medium">{selectedSite.waterIcePotential?.split('(')[0]?.trim() || 'High'}</span>
                       </div>
 
                       {selectedSite.keyScienceGoals?.length > 0 && (
                         <div className="pt-2 border-t border-[var(--line-soft)] text-xs">
-                          <span className="text-[10px] font-mono uppercase text-[var(--ink-faint)] block mb-1.5">
-                            Key Scientific Payloads:
+                          <span className="text-[10px] font-mono text-[var(--ink-faint)] block mb-1.5">
+                            Key scientific payloads:
                           </span>
                           <div className="flex flex-wrap gap-1">
                             {selectedSite.keyScienceGoals.map((goal, i) => (
                               <span
                                 key={i}
-                                className="text-[10px] px-2 py-0.5 rounded bg-[var(--paper-dark)] text-[var(--ink-soft)] border border-[var(--line-soft)]"
+                                className="text-[10px] px-2 py-0.5 rounded bg-[var(--paper)] text-[var(--ink-soft)] border border-[var(--line-soft)]"
                               >
                                 {goal}
                               </span>
@@ -552,35 +526,35 @@ function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
                 {/* Bottom Quick Row: Key Site Metrics */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bento-plate p-4">
-                    <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Mountain & Rim Relief</div>
-                    <div className="text-xl font-bold font-mono text-[var(--ink)] mt-1">
+                    <div className="text-[11px] font-mono text-[var(--ink-mute)]">Mountain relief</div>
+                    <div className="text-xl font-medium font-mono tabular-nums text-[var(--ink)] mt-1">
                       {selectedSite.elevationReliefM.toLocaleString()} m
                     </div>
-                    <div className="text-[10px] text-[var(--ink-mute)] mt-0.5">NASA LOLA Altimetry</div>
+                    <div className="text-[10px] text-[var(--ink-faint)] mt-0.5">NASA LOLA altimetry</div>
                   </div>
 
                   <div className="bento-plate p-4">
-                    <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Sunlight Hours ({timeWindow})</div>
-                    <div className="text-xl font-bold font-mono text-[var(--coral)] mt-1">
+                    <div className="text-[11px] font-mono text-[var(--ink-mute)]">Sunlight duration ({timeWindow})</div>
+                    <div className="text-xl font-medium font-mono tabular-nums text-[var(--coral)] mt-1">
                       {current ? `${power.hours}h` : '…'}
                     </div>
-                    <div className="text-[10px] text-[var(--ink-mute)] mt-0.5">Peak angle: {power.maxAlt}°</div>
+                    <div className="text-[10px] text-[var(--ink-faint)] mt-0.5">Peak angle: {power.maxAlt}°</div>
                   </div>
 
                   <div className="bento-plate p-4">
-                    <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Earth Contact ({timeWindow})</div>
-                    <div className="text-xl font-bold font-mono text-[var(--mustard)] mt-1">
+                    <div className="text-[11px] font-mono text-[var(--ink-mute)]">Direct Earth contact ({timeWindow})</div>
+                    <div className="text-xl font-medium font-mono tabular-nums text-[var(--mustard)] mt-1">
                       {current ? `${comm.hours}h` : '…'}
                     </div>
-                    <div className="text-[10px] text-[var(--ink-mute)] mt-0.5">Direct link: {comm.availabilityPercent}%</div>
+                    <div className="text-[10px] text-[var(--ink-faint)] mt-0.5">Direct link: {comm.availabilityPercent}%</div>
                   </div>
 
                   <div className="bento-plate p-4">
-                    <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Mission Context</div>
-                    <div className="text-sm font-bold text-[var(--ink)] truncate mt-1">
+                    <div className="text-[11px] font-mono text-[var(--ink-mute)]">Mission context</div>
+                    <div className="text-sm font-medium text-[var(--ink)] truncate mt-1">
                       {selectedSite.mission?.split('(')[0]?.trim()}
                     </div>
-                    <div className="text-[10px] text-[var(--ink-mute)] truncate mt-0.5">{selectedSite.contractor}</div>
+                    <div className="text-[10px] text-[var(--ink-faint)] truncate mt-0.5">{selectedSite.contractor}</div>
                   </div>
                 </div>
               </div>

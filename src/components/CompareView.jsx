@@ -26,8 +26,6 @@ import {
   Square,
   Mountain,
   ArrowRight,
-  Sparkles,
-  Trophy,
   Compass,
   ArrowUpDown,
   Droplets,
@@ -212,42 +210,42 @@ export default function CompareView({ date, setTimeWindow, pins, onChangePins, o
       {/* ── Top Leaderboard Cards ──────────────────────── */}
       <div ref={cardsRef} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Illumination Leader */}
-        <div className="bento-plate p-4 flex items-center justify-between hover:border-[var(--coral)] transition-colors">
+        <div className="bento-plate p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-[rgba(234,193,139,0.12)] border border-[rgba(234,193,139,0.3)] flex items-center justify-center">
-              <Sun className="w-6 h-6 text-[var(--coral)]" />
+            <div className="w-10 h-10 rounded-md bg-[var(--paper)] border border-[var(--line)] flex items-center justify-center">
+              <Sun className="w-5 h-5 text-[var(--coral)]" />
             </div>
             <div>
-              <span className="text-[10px] font-mono uppercase text-[var(--coral)] font-semibold flex items-center gap-1">
-                <Trophy className="w-3 h-3" /> Most Sunlight ({timeRange}h)
+              <span className="text-[11px] font-mono text-[var(--coral)] flex items-center gap-1">
+                Peak sunlight duration ({timeRange}h)
               </span>
-              <h3 className="text-base font-bold text-[var(--ink)] font-sans">{maxSun?.name}</h3>
+              <h3 className="text-sm font-medium text-[var(--ink)] font-sans">{maxSun?.name}</h3>
               <p className="text-xs text-[var(--ink-mute)]">{maxSun?.highlightTag}</p>
             </div>
           </div>
-          <div className="text-right font-mono">
-            <div className="text-2xl font-extrabold text-[var(--coral)]">{maxSun?.powerHours}h</div>
-            <div className="text-[11px] text-[var(--ink-mute)]">Average height: {maxSun?.sunAvgAlt}°</div>
+          <div className="text-right font-mono tabular-nums">
+            <div className="text-2xl font-medium text-[var(--coral)]">{maxSun?.powerHours}h</div>
+            <div className="text-[11px] text-[var(--ink-mute)]">Average elevation: {maxSun?.sunAvgAlt}°</div>
           </div>
         </div>
 
         {/* Earth Contact Leader */}
-        <div className="bento-plate p-4 flex items-center justify-between hover:border-[var(--mustard)] transition-colors">
+        <div className="bento-plate p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-[rgba(145,198,212,0.12)] border border-[rgba(145,198,212,0.3)] flex items-center justify-center">
-              <Radio className="w-6 h-6 text-[var(--mustard)]" />
+            <div className="w-10 h-10 rounded-md bg-[var(--paper)] border border-[var(--line)] flex items-center justify-center">
+              <Radio className="w-5 h-5 text-[var(--mustard)]" />
             </div>
             <div>
-              <span className="text-[10px] font-mono uppercase text-[var(--mustard)] font-semibold flex items-center gap-1">
-                <Trophy className="w-3 h-3" /> Best Earth Radio Signal ({timeRange}h)
+              <span className="text-[11px] font-mono text-[var(--mustard)] flex items-center gap-1">
+                Peak Earth line of sight ({timeRange}h)
               </span>
-              <h3 className="text-base font-bold text-[var(--ink)] font-sans">{maxComm?.name}</h3>
+              <h3 className="text-sm font-medium text-[var(--ink)] font-sans">{maxComm?.name}</h3>
               <p className="text-xs text-[var(--ink-mute)]">{maxComm?.highlightTag}</p>
             </div>
           </div>
-          <div className="text-right font-mono">
-            <div className="text-2xl font-extrabold text-[var(--mustard)]">{maxComm?.commHours}h</div>
-            <div className="text-[11px] text-[var(--ink-mute)]">{maxComm?.commPercent}% direct coverage</div>
+          <div className="text-right font-mono tabular-nums">
+            <div className="text-2xl font-medium text-[var(--mustard)]">{maxComm?.commHours}h</div>
+            <div className="text-[11px] text-[var(--ink-mute)]">{maxComm?.commPercent}% direct link</div>
           </div>
         </div>
       </div>

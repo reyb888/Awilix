@@ -8,7 +8,7 @@ import { coordinateText } from '../lib/mascotKnowledge.js';
 import gsap from 'gsap';
 import {
   Calendar, Globe, Mountain, BarChart3, GitCompare, Bot,
-  CheckCircle2, ChevronLeft, ChevronRight, Clock, Sparkles, ChevronDown
+  CheckCircle2, ChevronLeft, ChevronRight, Clock, ChevronDown
 } from 'lucide-react';
 
 export const MISSION_PRESETS = [
@@ -101,8 +101,8 @@ export default function Navbar({
       if (activeEl) {
         gsap.fromTo(
           activeEl,
-          { scale: 0.94 },
-          { scale: 1, duration: 0.25, ease: 'back.out(1.5)' }
+          { opacity: 0.75 },
+          { opacity: 1, duration: 0.18, ease: 'power2.out' }
         );
       }
     }
@@ -126,12 +126,12 @@ export default function Navbar({
       <div className="meta-topbar">
         <div className="flex items-center gap-3">
           <span className="flex items-center">
-            <span className="pulse-dot" />
-            <b>Awilix</b>&nbsp;·&nbsp;Lunar South Pole Light & Radio Atlas
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--coral)] inline-block mr-2" />
+            <b>Awilix</b>&nbsp;·&nbsp;Lunar south pole navigation atlas
           </span>
           <span className="hidden md:inline text-[var(--ink-faint)]">|</span>
           <span className="hidden md:inline text-[var(--ink-faint)]">
-            Data: <b className="text-[var(--ink)]">NASA LRO & 2026 Orbital Ephemeris</b>
+            Data: <span className="text-[var(--ink-soft)]">NASA LRO LOLA altimetry & 2026 orbital ephemeris</span>
           </span>
         </div>
 
@@ -141,9 +141,9 @@ export default function Navbar({
             className="flex items-center gap-1.5 text-[var(--ink-mute)] hover:text-[var(--coral)] transition-colors cursor-pointer"
           >
             <CheckCircle2 className="w-3.5 h-3.5 text-[var(--emerald)]" />
-            <span className="underline">Data & Sources</span>
+            <span className="underline">Data and sources</span>
           </button>
-          <span className="text-[var(--coral)] hidden sm:inline font-mono">{coordinateText(selectedSite)}</span>
+          <span className="text-[var(--coral)] hidden sm:inline font-mono tabular-nums">{coordinateText(selectedSite)}</span>
         </div>
       </div>
 
@@ -153,18 +153,18 @@ export default function Navbar({
           {/* Brand & Identity */}
           <div className="flex items-center gap-3 w-full xl:w-auto justify-between xl:justify-start">
             <a href="#top" className="brand-mark">
-              <span className="brand-icon-disc">☾</span>
+              <span className="brand-icon-disc">A</span>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-sans font-bold text-base tracking-tight text-[var(--ink)]">
-                    AWILIX
+                  <span className="font-sans font-medium text-base tracking-tight text-[var(--ink)]">
+                    Awilix
                   </span>
-                  <span className="text-[9.5px] font-mono uppercase bg-[rgba(234,193,139,0.12)] border border-[rgba(234,193,139,0.3)] text-[var(--coral)] px-1.5 py-0.5 rounded">
-                    South Pole 2026
+                  <span className="text-[10px] font-mono text-[var(--coral)] px-1.5 py-0.5 rounded bg-[var(--paper)] border border-[var(--line)]">
+                    South pole 2026
                   </span>
                 </div>
-                <p className="text-[10px] text-[var(--ink-mute)] font-sans">
-                  Sunlight & Direct Earth Communications
+                <p className="text-[11px] text-[var(--ink-mute)] font-sans">
+                  Sunlight and direct Earth radio line of sight
                 </p>
               </div>
             </a>
@@ -182,14 +182,14 @@ export default function Navbar({
           {/* Navigation View Switcher Pills */}
           <nav
             ref={navRef}
-            className="flex items-center bg-[var(--bone)] p-1 rounded-xl border border-[var(--line)] overflow-x-auto max-w-full scrollbar-none"
+            className="flex items-center bg-[var(--paper)] p-0.5 rounded-lg border border-[var(--line)] overflow-x-auto max-w-full scrollbar-none"
           >
             <button
               onClick={() => setActiveTab('globe')}
               className={`nav-tab-pill ${activeTab === 'globe' ? 'active' : ''}`}
             >
               <Globe className="w-3.5 h-3.5" />
-              <span><b className="pill-num font-mono mr-1">01</b>Moon Globe</span>
+              <span>Moon globe</span>
             </button>
 
             <button
@@ -197,7 +197,7 @@ export default function Navbar({
               className={`nav-tab-pill ${activeTab === 'terrain' ? 'active' : ''}`}
             >
               <Mountain className="w-3.5 h-3.5" />
-              <span><b className="pill-num font-mono mr-1">02</b>3D Terrain</span>
+              <span>3D terrain</span>
             </button>
 
             <button
@@ -205,7 +205,7 @@ export default function Navbar({
               className={`nav-tab-pill ${activeTab === 'analytics' ? 'active' : ''}`}
             >
               <BarChart3 className="w-3.5 h-3.5" />
-              <span><b className="pill-num font-mono mr-1">03</b>Telemetry</span>
+              <span>Telemetry</span>
             </button>
 
             <button
@@ -213,7 +213,7 @@ export default function Navbar({
               className={`nav-tab-pill ${activeTab === 'compare' ? 'active' : ''}`}
             >
               <GitCompare className="w-3.5 h-3.5" />
-              <span><b className="pill-num font-mono mr-1">04</b>Compare</span>
+              <span>Compare</span>
             </button>
 
             <button
@@ -221,7 +221,7 @@ export default function Navbar({
               className={`nav-tab-pill ${activeTab === 'assistant' ? 'active' : ''}`}
             >
               <Bot className="w-3.5 h-3.5" />
-              <span><b className="pill-num font-mono mr-1">05</b>Mission AI</span>
+              <span>Mission assistant</span>
             </button>
           </nav>
 
@@ -231,21 +231,21 @@ export default function Navbar({
             <div className="relative" ref={presetRef}>
               <button
                 onClick={() => setPresetOpen(!presetOpen)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--bone)] hover:bg-[var(--bone-hover)] border border-[var(--line)] text-xs text-[var(--ink)] font-sans transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[var(--paper)] hover:bg-[var(--bone)] border border-[var(--line)] text-xs text-[var(--ink-soft)] font-sans transition-colors cursor-pointer"
                 title="Select a mission date preset"
               >
-                <Sparkles className="w-3.5 h-3.5 text-[var(--coral)]" />
-                <span className="hidden sm:inline text-[11.5px]">Mission Presets</span>
+                <Calendar className="w-3.5 h-3.5 text-[var(--coral)]" />
+                <span className="hidden sm:inline text-[11.5px]">Mission presets</span>
                 <ChevronDown className="w-3 h-3 text-[var(--ink-faint)]" />
               </button>
 
               {presetOpen && (
                 <div
-                  className="absolute left-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-32px)] bg-[var(--bone)] border border-[var(--line)] rounded-xl shadow-2xl p-1.5 z-[100] animate-fade-in"
+                  className="absolute left-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-32px)] bg-[var(--bone)] border border-[var(--line)] rounded-lg shadow-xl p-1 z-[100] animate-fade-in"
                   onClick={() => setPresetOpen(false)}
                 >
-                  <div className="text-[10px] font-mono uppercase text-[var(--ink-faint)] px-2.5 py-1 border-b border-[var(--line-soft)]">
-                    Historical & Planned Missions
+                  <div className="text-[10px] font-mono text-[var(--ink-faint)] px-2.5 py-1 border-b border-[var(--line-soft)]">
+                    Historical and planned missions
                   </div>
                   {MISSION_PRESETS.map((p, idx) => (
                     <button

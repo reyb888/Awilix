@@ -23,7 +23,6 @@ import {
   Zap,
   Clock,
   Compass,
-  Sparkles,
   Layers,
   Award,
   ChevronRight,
@@ -113,10 +112,10 @@ export default function SiteDetailView({
         <button
           onClick={() => onVisitTerrain?.(site)}
           className="btn-primary text-xs cursor-pointer flex items-center gap-1.5"
-          title="Explore high-resolution 3D lunar altimetry and real-time lighting for this site"
+          title="Explore 3D lunar altimetry and real-time lighting for this site"
         >
           <Mountain className="w-3.5 h-3.5" />
-          <span>Launch 3D Terrain Altimetry</span>
+          <span>Launch 3D terrain</span>
         </button>
       </div>
 
@@ -125,24 +124,24 @@ export default function SiteDetailView({
         {/* Solar Generation Span */}
         <div className="bento-plate p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--ink-soft)] flex items-center gap-1.5">
+            <span className="text-xs font-medium text-[var(--ink-soft)] flex items-center gap-1.5">
               <Sun className="w-4 h-4 text-[var(--coral)]" />
-              Sunlight Duration ({timeWindow})
+              Sunlight duration ({timeWindow})
             </span>
-            <span className="telemetry-chip sun text-[10px]">Solar Power</span>
+            <span className="telemetry-chip sun text-[10px]">Solar</span>
           </div>
           <div className="mt-3">
-            <div className="text-3xl font-extrabold font-mono text-[var(--coral)]">
+            <div className="text-2xl font-medium font-mono tabular-nums text-[var(--coral)]">
               {scenario ? `${power.hours}h` : '…'}
             </div>
-            <div className="text-[11px] font-mono text-[var(--ink-mute)] mt-1 flex justify-between">
-              <span>Avg elevation: <strong className="text-[var(--ink)]">{power.avgAlt}°</strong></span>
-              <span>Peak: <strong className="text-[var(--ink)]">{power.maxAlt}°</strong></span>
+            <div className="text-[11px] font-mono tabular-nums text-[var(--ink-mute)] mt-1 flex justify-between">
+              <span>Avg elevation: <span className="text-[var(--ink)]">{power.avgAlt}°</span></span>
+              <span>Peak: <span className="text-[var(--ink)]">{power.maxAlt}°</span></span>
             </div>
           </div>
-          <div className="w-full bg-[var(--paper-dark)] h-1.5 rounded-full overflow-hidden mt-3">
+          <div className="w-full bg-[var(--paper)] h-1 rounded overflow-hidden mt-3">
             <div
-              className="bg-[var(--coral)] h-full rounded-full transition-all duration-300"
+              className="bg-[var(--coral)] h-full rounded transition-all duration-300"
               style={{ width: `${Math.min(100, (power.hours / (timeRange || 24)) * 100)}%` }}
             />
           </div>
@@ -151,24 +150,24 @@ export default function SiteDetailView({
         {/* DTE Comm Window */}
         <div className="bento-plate p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--ink-soft)] flex items-center gap-1.5">
+            <span className="text-xs font-medium text-[var(--ink-soft)] flex items-center gap-1.5">
               <Radio className="w-4 h-4 text-[var(--mustard)]" />
-              Direct Earth Contact
+              Direct Earth contact
             </span>
-            <span className="telemetry-chip earth text-[10px]">Radio Link</span>
+            <span className="telemetry-chip earth text-[10px]">Radio link</span>
           </div>
           <div className="mt-3">
-            <div className="text-3xl font-extrabold font-mono text-[var(--mustard)]">
+            <div className="text-2xl font-medium font-mono tabular-nums text-[var(--mustard)]">
               {scenario ? `${comm.hours}h` : '…'}
             </div>
-            <div className="text-[11px] font-mono text-[var(--ink-mute)] mt-1 flex justify-between">
-              <span>Avg elevation: <strong className="text-[var(--ink)]">{comm.avgAlt}°</strong></span>
-              <span>Uptime: <strong className="text-[var(--ink)]">{comm.availabilityPercent}%</strong></span>
+            <div className="text-[11px] font-mono tabular-nums text-[var(--ink-mute)] mt-1 flex justify-between">
+              <span>Avg elevation: <span className="text-[var(--ink)]">{comm.avgAlt}°</span></span>
+              <span>Uptime: <span className="text-[var(--ink)]">{comm.availabilityPercent}%</span></span>
             </div>
           </div>
-          <div className="w-full bg-[var(--paper-dark)] h-1.5 rounded-full overflow-hidden mt-3">
+          <div className="w-full bg-[var(--paper)] h-1 rounded overflow-hidden mt-3">
             <div
-              className="bg-[var(--mustard)] h-full rounded-full transition-all duration-300"
+              className="bg-[var(--mustard)] h-full rounded transition-all duration-300"
               style={{ width: `${Math.min(100, comm.availabilityPercent)}%` }}
             />
           </div>
@@ -177,19 +176,19 @@ export default function SiteDetailView({
         {/* Topographic Relief */}
         <div className="bento-plate p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--ink-soft)] flex items-center gap-1.5">
+            <span className="text-xs font-medium text-[var(--ink-soft)] flex items-center gap-1.5">
               <Mountain className="w-4 h-4 text-[var(--olive)]" />
-              Mountain & Rim Relief
+              Mountain relief
             </span>
             <span className="text-[10px] font-mono text-[var(--ink-faint)]">NASA LOLA</span>
           </div>
           <div className="mt-3">
-            <div className="text-3xl font-extrabold font-mono text-[var(--ink)]">
+            <div className="text-2xl font-medium font-mono tabular-nums text-[var(--ink)]">
               {site.elevationReliefM.toLocaleString()} m
             </div>
-            <div className="text-[11px] font-mono text-[var(--ink-mute)] mt-1 flex justify-between">
-              <span>Crater diameter: <strong className="text-[var(--ink)]">{site.craterDiameterKm} km</strong></span>
-              <span>Depth: <strong className="text-[var(--ink)]">{site.craterDepthKm} km</strong></span>
+            <div className="text-[11px] font-mono tabular-nums text-[var(--ink-mute)] mt-1 flex justify-between">
+              <span>Crater diameter: <span className="text-[var(--ink)]">{site.craterDiameterKm} km</span></span>
+              <span>Depth: <span className="text-[var(--ink)]">{site.craterDepthKm} km</span></span>
             </div>
           </div>
           <div className="text-[11px] text-[var(--ink-faint)] mt-3 truncate font-mono">
@@ -200,18 +199,18 @@ export default function SiteDetailView({
         {/* Target Region */}
         <div className="bento-plate p-4 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--ink-soft)] flex items-center gap-1.5">
+            <span className="text-xs font-medium text-[var(--ink-soft)] flex items-center gap-1.5">
               <Award className="w-4 h-4 text-[var(--coral)]" />
-              Exploration Context
+              Exploration context
             </span>
-            <span className="text-[10px] font-mono text-[var(--coral)]">South Pole</span>
+            <span className="text-[10px] font-mono text-[var(--coral)]">South pole</span>
           </div>
           <div className="mt-3">
-            <div className="text-sm font-bold text-[var(--ink)] truncate">
+            <div className="text-sm font-medium text-[var(--ink)] truncate">
               {site.mission?.split('(')[0]?.trim()}
             </div>
             <div className="text-[11px] font-mono text-[var(--ink-mute)] mt-1">
-              Affiliation: <strong className="text-[var(--ink)]">{site.contractor}</strong>
+              Affiliation: <span className="text-[var(--ink)]">{site.contractor}</span>
             </div>
           </div>
           <div className="text-[11px] text-[var(--ink-faint)] mt-3 truncate font-mono">
