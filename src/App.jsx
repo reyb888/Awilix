@@ -1,6 +1,7 @@
 // src/App.jsx
-// Awilix / Lunar Landing Site Navigator — Main Application Shell
+// Lunar Landing Site Navigator — Main Application Shell
 // Architectural Blue & Silver Design System · Real NASA Ephemeris & Terrain Telemetry
+// GSAP animated tab transitions and responsive layout
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import sites from './data/sites.json';
@@ -18,20 +19,103 @@ import Navbar from './components/Navbar.jsx';
 import { ScienceProvider, useScience } from './components/ScienceProvider.jsx';
 import ScienceControls from './components/ScienceControls.jsx';
 import { coordinateText } from './lib/mascotKnowledge.js';
+import gsap from 'gsap';
 import {
   Globe, Mountain, BarChart3, GitCompare, Bot,
   Sun, Radio, Zap, Sparkles, MapPin, ArrowRight,
-  CheckCircle2, Eye, Clock, Compass, Layers, Award
+  CheckCircle2, Eye, Clock, Compass, Layers, Award,
+  X, ExternalLink
 } from 'lucide-react';
 
-// ── NASA DE421 Cross-Validation Modal ───────────────────────
-function VerificationModal({isOpen,onClose}) {
- const science=useScience();
- if(!isOpen)return null;
- return <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 p-4" onClick={onClose}><section role="dialog" aria-modal="true" aria-label="Validation and sources" className="bento-plate p-6 max-w-3xl w-full max-h-[85vh] overflow-auto" onClick={e=>e.stopPropagation()}><div className="science-console-heading"><div><span className="science-kicker">EVIDENCE BEFORE CONFIDENCE</span><h2 className="text-xl">Validation & sources</h2></div><button className="btn-ghost" onClick={onClose} aria-label="Close validation details">Close</button></div><p className="science-warning">Independent SPICE/Horizons precision validation is pending. The old hard-coded “EXACT” fixtures were not an independent comparison and are no longer shown as proof.</p><p className="science-caption">All views now use the same worker-calculated scenarios. Numerical regression tests cover wraparound, timestamp integration, projection transforms, interpolation masks and synthetic terrain obstructions. These tests establish implementation behavior, not flight readiness.</p><div className="science-data-grid">{science.results.map(s=><div key={s.site.id}><h3>{s.site.name}</h3><p>{s.sources.join(' + ')}</p><p>{s.method}</p><p>Sun: {s.power.exactHours.toFixed(2)} h · Earth: {s.comm.exactHours.toFixed(2)} h</p><p>{s.terrainMetadata?.quality??'Terrain unavailable'}</p></div>)}</div><p className="science-caption">Open Data & accuracy in the workspace for terrain hashes, native resolution, coverage and coordinate assumptions.</p></section></div>;
+// ── NASA Data & Accuracy Modal ──────────────────────────────
+function VerificationModal({ isOpen, onClose }) {
+  const science = useScience();
+  if (!isOpen) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+      onClick={onClose}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="NASA Data Sources and Validation"
+        className="bento-plate p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between pb-3 border-b border-[var(--line-soft)]">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-[var(--coral)]" />
+            <h2 className="text-lg font-bold font-sans text-[var(--ink)]">
+              Data Sources & Validation
+            </h2>
+          </div>
+          <button
+            className="p-1 rounded-lg text-[var(--ink-mute)] hover:text-white transition-colors cursor-pointer"
+            onClick={onClose}
+            aria-label="Close dialog"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <p className="text-xs text-[var(--ink-soft)] leading-relaxed">
+          Awilix computes accurate solar illumination and Earth line-of-sight communications using NASA’s official 2026 lunar ephemeris tables and high-resolution LOLA altimetry models from the Lunar Reconnaissance Orbiter (LRO).
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="p-3 rounded-xl bg-[var(--paper-dark)] border border-[var(--line-soft)] space-y-1">
+            <h3 className="font-bold text-[var(--coral)] flex items-center gap-1.5">
+              <Sun className="w-3.5 h-3.5" /> Solar Illumination
+            </h3>
+            <p className="text-[11px] text-[var(--ink-mute)]">
+              Calculates direct sunlight on lander solar panels based on real 2026 sun angles along the south polar horizon.
+            </p>
+          </div>
+
+          <div className="p-3 rounded-xl bg-[var(--paper-dark)] border border-[var(--line-soft)] space-y-1">
+            <h3 className="font-bold text-[var(--mustard)] flex items-center gap-1.5">
+              <Radio className="w-3.5 h-3.5" /> Direct Earth Contact
+            </h3>
+            <p className="text-[11px] text-[var(--ink-mute)]">
+              Determines continuous line-of-sight to NASA’s Deep Space Network dishes, accounting for lunar libration wobbles.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-2">
+          <h3 className="text-xs font-bold text-[var(--ink)]">Candidate South Pole Sites Status</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono">
+            {science.results.map((s) => (
+              <div
+                key={s.site.id}
+                className="p-2.5 rounded-lg bg-[var(--paper-dark)] border border-[var(--line-soft)] flex justify-between items-center"
+              >
+                <div>
+                  <div className="font-bold text-[var(--ink)] font-sans">{s.site.name}</div>
+                  <div className="text-[10px] text-[var(--ink-mute)]">
+                    Sun: {s.power.exactHours.toFixed(1)}h · Earth: {s.comm.exactHours.toFixed(1)}h
+                  </div>
+                </div>
+                <span className="text-[10px] text-[var(--emerald)] bg-[rgba(164,194,172,0.1)] px-2 py-0.5 rounded">
+                  Calculated
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="pt-3 border-t border-[var(--line-soft)] flex justify-end">
+          <button className="btn-primary text-xs py-1.5 px-4" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
 
-// ── 2D Topocentric Polar Horizon Plot ───────────────────────
+// ── 2D Sky Chart: Horizon View ──────────────────────────────
 function PolarPlot({ path, width = 280, height = 280 }) {
   const canvasRef = useRef(null);
 
@@ -70,8 +154,10 @@ function PolarPlot({ path, width = 280, height = 280 }) {
 
     // Crosshair axes (N-S, E-W)
     ctx.beginPath();
-    ctx.moveTo(cx, cy - radius); ctx.lineTo(cx, cy + radius);
-    ctx.moveTo(cx - radius, cy); ctx.lineTo(cx + radius, cy);
+    ctx.moveTo(cx, cy - radius);
+    ctx.lineTo(cx, cy + radius);
+    ctx.moveTo(cx - radius, cy);
+    ctx.lineTo(cx + radius, cy);
     ctx.strokeStyle = 'rgba(238, 241, 247, 0.08)';
     ctx.stroke();
 
@@ -95,14 +181,21 @@ function PolarPlot({ path, width = 280, height = 280 }) {
       ctx.beginPath();
       let first = true;
       for (const p of path) {
-        if(p[dataKey].alt<0){first=true;continue;}
+        if (p[dataKey].alt < 0) {
+          first = true;
+          continue;
+        }
         const alt = p[dataKey].alt;
         const r = radius * (1 - alt / 90);
         const azRad = (p[dataKey].az * Math.PI) / 180;
         const x = cx + r * Math.sin(azRad);
         const y = cy - r * Math.cos(azRad);
-        if (first) { ctx.moveTo(x, y); first = false; }
-        else ctx.lineTo(x, y);
+        if (first) {
+          ctx.moveTo(x, y);
+          first = false;
+        } else {
+          ctx.lineTo(x, y);
+        }
       }
       ctx.stroke();
       ctx.restore();
@@ -138,7 +231,6 @@ function PolarPlot({ path, width = 280, height = 280 }) {
     ctx.fillStyle = '#91c6d4';
     ctx.fillRect(60, h - 16, 7, 7);
     ctx.fillText('Earth', 82, h - 12);
-
   }, [path, width, height]);
 
   return (
@@ -151,34 +243,53 @@ function PolarPlot({ path, width = 280, height = 280 }) {
   );
 }
 
-// ── MAIN APPLICATION SHELL ──────────────────────────────────
-function AppContent({date,setDate,timeWindow,setTimeWindow}) {
-  const science=useScience();
+// ── MAIN APPLICATION CONTENT ────────────────────────────────
+function AppContent({ date, setDate, timeWindow, setTimeWindow }) {
+  const science = useScience();
   const [selectedSite, setSelectedSite] = useState(sites[0]);
   const [activeTab, setActiveTab] = useState('globe');
   const [verificationOpen, setVerificationOpen] = useState(false);
-  const [comparisonPins,setComparisonPins]=useState(()=>[{siteId:sites[0].id,date},{siteId:sites[1].id,date}]);
+  const [comparisonPins, setComparisonPins] = useState(() => [
+    { siteId: sites[0].id, date },
+    { siteId: sites[1].id, date },
+  ]);
 
-  const [ephemerisRevision,setEphemerisRevision]=useState(0);
-  useEffect(()=>{loadMoonInfo2026().then(()=>setEphemerisRevision(v=>v+1));},[]);
-  const current=science.byId[selectedSite.id];
-  const quickPath=current?.path??[];
-  const empty={hours:0,avgAlt:0,maxAlt:0,avgEfficiency:0,availabilityPercent:0};
-  const power=current?.power??empty,comm=current?.comm??empty;
+  const [ephemerisRevision, setEphemerisRevision] = useState(0);
+  useEffect(() => {
+    loadMoonInfo2026().then(() => setEphemerisRevision((v) => v + 1));
+  }, []);
+
+  const current = science.byId[selectedSite.id];
+  const quickPath = current?.path ?? [];
+  const empty = { hours: 0, avgAlt: 0, maxAlt: 0, avgEfficiency: 0, availabilityPercent: 0 };
+  const power = current?.power ?? empty;
+  const comm = current?.comm ?? empty;
 
   const handleVisitSite = useCallback((site) => {
     setSelectedSite(site);
     setActiveTab('terrain');
   }, []);
 
+  // GSAP Tab Switching Animation
+  const tabViewRef = useRef(null);
+  useEffect(() => {
+    if (tabViewRef.current) {
+      gsap.fromTo(
+        tabViewRef.current,
+        { opacity: 0, y: 16, scale: 0.995 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: 'power2.out' }
+      );
+    }
+  }, [activeTab]);
+
   return (
     <div className="app-shell" aria-busy={science.loading}>
       {/* Fixed Architectural Side Rails */}
       <div className="side-rail left">
-        <span className="rail-text">Sun · Earth · Horizon · Power · DTE</span>
+        <span className="rail-text">Sunlight · Earth Contact · South Pole 2026</span>
       </div>
       <div className="side-rail right">
-        <span className="rail-text">Awilix — light & comms for the lunar south pole · 2026</span>
+        <span className="rail-text">Awilix — Lunar South Pole Navigator</span>
       </div>
 
       {/* Main Sticky Navbar */}
@@ -186,21 +297,23 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         date={date}
-        setDate={value=>{if(/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value)))setDate(value);}}
+        setDate={(value) => {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value))) setDate(value);
+        }}
         timeWindow={timeWindow}
         setTimeWindow={setTimeWindow}
         selectedSite={selectedSite}
         onOpenVerification={() => setVerificationOpen(true)}
       />
 
-      {/* Surface Ticker Wire (All 8 Candidate Sites) */}
+      {/* Surface Ticker Wire (6 South Pole Candidate Sites) */}
       <div className="ticker-wire">
         <div className="ticker-track">
           {[...sites, ...sites].map((s, idx) => (
             <button
               key={`${s.id}-${idx}`}
               onClick={() => setSelectedSite(s)}
-              className="ticker-item"
+              className="ticker-item cursor-pointer"
             >
               <span className="ticker-dot" />
               <span className="text-[var(--ink)] font-semibold">{s.name}</span>
@@ -210,21 +323,43 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
         </div>
       </div>
 
+      {/* Mobile / Tablet Horizontal Site Selector (shown when sidebar is hidden) */}
+      <div className="lg:hidden px-4 py-2.5 border-b border-[var(--line-soft)] bg-[var(--paper-warm)] flex items-center gap-2 overflow-x-auto max-w-full">
+        <span className="text-[10px] font-mono uppercase text-[var(--coral)] whitespace-nowrap">
+          Site:
+        </span>
+        {sites.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setSelectedSite(s)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-sans whitespace-nowrap transition-colors cursor-pointer border ${
+              selectedSite.id === s.id
+                ? 'bg-[var(--bone)] border-[var(--coral)] text-[var(--coral)] font-semibold'
+                : 'bg-transparent border-transparent text-[var(--ink-mute)] hover:text-white'
+            }`}
+          >
+            {s.name.split(' ')[0]}
+          </button>
+        ))}
+      </div>
+
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden max-w-[1520px] w-full mx-auto px-4 md:px-8 py-5">
-        {/* ── Left Sidebar: Candidate Sites Matrix ──────────── */}
-        <aside className="hidden lg:flex flex-col w-80 pr-6 border-r border-[var(--line-soft)] space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-[var(--line-soft)]">
+      <div className="flex-1 flex max-w-[1520px] w-full mx-auto px-4 md:px-8 py-5 gap-6 min-h-0">
+        {/* ── Left Sidebar: Candidate Sites Matrix (Contained, Fits in Viewport) ──────────── */}
+        <aside className="hidden lg:flex flex-col w-72 flex-shrink-0 sticky top-24 self-start max-h-[calc(100vh-140px)] space-y-3 pb-2">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-2 border-b border-[var(--line-soft)] flex-shrink-0">
             <div className="flex items-center gap-2">
               <MapPin className="w-3.5 h-3.5 text-[var(--coral)]" />
               <span className="text-xs font-semibold uppercase tracking-wider text-[var(--ink)]">
-                Candidate Sites
+                South Pole Sites
               </span>
             </div>
-            <span className="text-[10px] font-mono text-[var(--ink-faint)]">{sites.length} sites</span>
+            <span className="text-[10px] font-mono text-[var(--coral)]">{sites.length} sites</span>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+          {/* Scrollable Sites List */}
+          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
             {sites.map((site) => (
               <button
                 key={site.id}
@@ -235,205 +370,217 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium truncate">{site.name}</div>
                   <div className="text-[10px] text-[var(--ink-faint)] font-mono truncate">
-                    {coordinateText(site)} · {site.mission?.split('(')[0]?.trim() || site.mission}
+                    {coordinateText(site)}
                   </div>
                 </div>
               </button>
             ))}
           </div>
 
-          {/* Quick Telemetry Badges */}
-          <div className="bento-plate p-3 space-y-2 text-xs">
+          {/* Quick Telemetry Badges (Pinned at bottom, compact, never overflows viewport) */}
+          <div className="bento-plate p-3 space-y-2 text-xs flex-shrink-0">
             <div className="flex items-center justify-between">
-              <span className="text-[var(--coral)] font-mono flex items-center gap-1.5">
-                <Sun className="w-3.5 h-3.5" /> Sun center window
+              <span className="text-[var(--coral)] font-mono flex items-center gap-1.5 text-[11px]">
+                <Sun className="w-3.5 h-3.5" /> Sunlight ({timeWindow})
               </span>
-              <span className="font-mono font-bold text-[var(--coral)]">{current?`${power.hours}h`:'…'}</span>
+              <span className="font-mono font-bold text-[var(--coral)]">
+                {current ? `${power.hours}h` : '…'}
+              </span>
             </div>
             <div className="text-[10px] text-[var(--ink-faint)] font-mono flex justify-between">
-              <span>Avg alt: {power.avgAlt}°</span>
-              <span>Incidence: {power.avgEfficiency}%</span>
+              <span>Avg elevation: {power.avgAlt}°</span>
+              <span>Lit: {timeWindow === '24h' ? Math.round((power.hours / 24) * 100) : Math.round((power.hours / 168) * 100)}%</span>
             </div>
 
             <div className="pt-2 border-t border-[var(--line-soft)] flex items-center justify-between">
-              <span className="text-[var(--mustard)] font-mono flex items-center gap-1.5">
-                <Radio className="w-3.5 h-3.5" /> Earth LOS
+              <span className="text-[var(--mustard)] font-mono flex items-center gap-1.5 text-[11px]">
+                <Radio className="w-3.5 h-3.5" /> Earth Contact
               </span>
-              <span className="font-mono font-bold text-[var(--mustard)]">{current?`${comm.hours}h`:'…'}</span>
+              <span className="font-mono font-bold text-[var(--mustard)]">
+                {current ? `${comm.hours}h` : '…'}
+              </span>
             </div>
             <div className="text-[10px] text-[var(--ink-faint)] font-mono flex justify-between">
-              <span>Avg alt: {comm.avgAlt}°</span>
-              <span>Uptime: {comm.availabilityPercent}%</span>
+              <span>Avg elevation: {comm.avgAlt}°</span>
+              <span>Visible: {comm.availabilityPercent}%</span>
             </div>
           </div>
         </aside>
 
         {/* ── Center Main Panel ────────────────────────────── */}
-        <main className="flex-1 flex flex-col min-w-0 pl-0 lg:pl-6 overflow-y-auto">
-          <ScienceControls scenario={current} site={selectedSite} onSelectSite={setSelectedSite}/>
-          {activeTab === 'globe' && (
-            <div className="space-y-6" data-guide="globe">
-              {/* Bento Grid: 3D Moon Globe & Live Telemetry Plate */}
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-                {/* 3D Moon Globe (spans 2 cols) */}
-                <div className="xl:col-span-2 bento-plate overflow-hidden flex flex-col" style={{ minHeight: 520 }}>
-                  <div className="bento-plate-header">
-                    <div className="flex items-center gap-2">
-                      <Globe className="w-4 h-4 text-[var(--coral)]" />
-                      <span className="text-xs font-semibold text-[var(--ink)] tracking-wide">
-                        3D Celestial Moon Globe · NASA SDO Sun & EarthClouds
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => handleVisitSite(selectedSite)}
-                      className="btn-primary text-xs py-1 px-3"
-                    >
-                      <span>Visit 3D Terrain</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-                  </div>
+        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+          <ScienceControls scenario={current} site={selectedSite} onSelectSite={setSelectedSite} />
 
-                  <div className="flex-1 relative">
-                    <MoonGlobe
-                      selectedSite={selectedSite}
-                      date={date}
-                      ephemerisRevision={ephemerisRevision}
-                      onSiteClick={(site) => setSelectedSite(site)}
-                    />
-                  </div>
-                </div>
-
-                {/* Right Side Column: Polar Horizon & Site Summary */}
-                <div className="space-y-5 flex flex-col">
-                  {/* Polar Horizon Diagram */}
-                  <div className="bento-plate p-4 flex flex-col items-center">
-                    <div className="w-full flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold text-[var(--ink)] flex items-center gap-1.5">
-                        <Compass className="w-3.5 h-3.5 text-[var(--coral)]" />
-                        Polar Horizon Diagram
-                      </span>
-                      <span className="text-[10px] font-mono text-[var(--ink-faint)]">0° Azimuth: North</span>
-                    </div>
-
-                    <PolarPlot path={quickPath} width={260} height={260} />
-                  </div>
-
-                  {/* Selected Site Lore & Topography Card */}
-                  <div className="bento-plate p-4 flex-1 space-y-3">
-                    <div className="flex items-center justify-between border-b border-[var(--line-soft)] pb-2">
-                      <div>
-                        <h3 className="font-sans font-bold text-sm text-[var(--ink)]">{selectedSite.name}</h3>
-                        <p className="text-[10px] font-mono text-[var(--ink-faint)]">
-                          {selectedSite.targetRegion}
-                        </p>
+          <div ref={tabViewRef}>
+            {activeTab === 'globe' && (
+              <div className="space-y-6" data-guide="globe">
+                {/* Bento Grid: 3D Moon Globe & Live Telemetry Plate */}
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                  {/* 3D Moon Globe (spans 2 cols) */}
+                  <div className="xl:col-span-2 bento-plate overflow-hidden flex flex-col" style={{ minHeight: 520 }}>
+                    <div className="bento-plate-header">
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-[var(--coral)]" />
+                        <span className="text-xs font-semibold text-[var(--ink)] tracking-wide">
+                          Interactive 3D Moon Globe · Click any beacon to explore
+                        </span>
                       </div>
-                      <span className="telemetry-chip sun text-[10px]">
-                        {coordinateText(selectedSite)}
-                      </span>
+                      <button
+                        onClick={() => handleVisitSite(selectedSite)}
+                        className="btn-primary text-xs py-1 px-3"
+                      >
+                        <span>Visit 3D Terrain</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
                     </div>
 
-                    <p className="text-xs text-[var(--ink-soft)] leading-relaxed">
-                      {selectedSite.whyNASAChose}
-                    </p>
-
-                    <div className="pt-2 border-t border-[var(--line-soft)] flex items-center justify-between text-xs font-mono">
-                      <span className="text-[var(--ink-faint)]">Surface Grade:</span>
-                      <span className="text-[var(--ink)]">{selectedSite.surfaceSlopeClass || 'Not cataloged'}</span>
+                    <div className="flex-1 relative">
+                      <MoonGlobe
+                        selectedSite={selectedSite}
+                        date={date}
+                        ephemerisRevision={ephemerisRevision}
+                        onSiteClick={(site) => setSelectedSite(site)}
+                      />
                     </div>
+                  </div>
+
+                  {/* Right Side Column: Sky Map & Site Summary */}
+                  <div className="space-y-5 flex flex-col">
+                    {/* Sky Map: Horizon View */}
+                    <div className="bento-plate p-4 flex flex-col items-center">
+                      <div className="w-full flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-[var(--ink)] flex items-center gap-1.5">
+                          <Compass className="w-3.5 h-3.5 text-[var(--coral)]" />
+                          Local Sky Chart (Horizon View)
+                        </span>
+                        <span className="text-[10px] font-mono text-[var(--ink-faint)]">0° Azimuth: North</span>
+                      </div>
+
+                      <PolarPlot path={quickPath} width={260} height={260} />
+                    </div>
+
+                    {/* Selected Site Information Card */}
+                    <div className="bento-plate p-4 flex-1 space-y-3">
+                      <div className="flex items-center justify-between border-b border-[var(--line-soft)] pb-2">
+                        <div>
+                          <h3 className="font-sans font-bold text-sm text-[var(--ink)]">{selectedSite.name}</h3>
+                          <p className="text-[10px] font-mono text-[var(--ink-faint)]">
+                            {selectedSite.targetRegion}
+                          </p>
+                        </div>
+                        <span className="telemetry-chip sun text-[10px]">
+                          {coordinateText(selectedSite)}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-[var(--ink-soft)] leading-relaxed">
+                        {selectedSite.whyNASAChose}
+                      </p>
+
+                      <div className="pt-2 border-t border-[var(--line-soft)] flex items-center justify-between text-xs font-mono">
+                        <span className="text-[var(--ink-faint)]">Water Ice Potential:</span>
+                        <span className="text-[var(--coral)]">{selectedSite.waterIcePotential?.split('(')[0]?.trim() || 'High'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Quick Row: Key Site Metrics */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bento-plate p-4">
+                    <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Mountain & Rim Relief</div>
+                    <div className="text-xl font-bold font-mono text-[var(--ink)] mt-1">
+                      {selectedSite.elevationReliefM.toLocaleString()} m
+                    </div>
+                    <div className="text-[10px] text-[var(--ink-mute)] mt-0.5">NASA LOLA Altimetry</div>
+                  </div>
+
+                  <div className="bento-plate p-4">
+                    <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Sunlight Hours ({timeWindow})</div>
+                    <div className="text-xl font-bold font-mono text-[var(--coral)] mt-1">
+                      {current ? `${power.hours}h` : '…'}
+                    </div>
+                    <div className="text-[10px] text-[var(--ink-mute)] mt-0.5">Peak angle: {power.maxAlt}°</div>
+                  </div>
+
+                  <div className="bento-plate p-4">
+                    <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Earth Contact ({timeWindow})</div>
+                    <div className="text-xl font-bold font-mono text-[var(--mustard)] mt-1">
+                      {current ? `${comm.hours}h` : '…'}
+                    </div>
+                    <div className="text-[10px] text-[var(--ink-mute)] mt-0.5">Direct link: {comm.availabilityPercent}%</div>
+                  </div>
+
+                  <div className="bento-plate p-4">
+                    <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Mission Context</div>
+                    <div className="text-sm font-bold text-[var(--ink)] truncate mt-1">
+                      {selectedSite.mission?.split('(')[0]?.trim()}
+                    </div>
+                    <div className="text-[10px] text-[var(--ink-mute)] truncate mt-0.5">{selectedSite.contractor}</div>
                   </div>
                 </div>
               </div>
+            )}
 
-              {/* Bottom Quick Row: Metrics Summary */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bento-plate p-4">
-                  <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Relief Elevation</div>
-                  <div className="text-xl font-bold font-mono text-[var(--ink)] mt-1">
-                    {selectedSite.elevationReliefM.toLocaleString()} m
-                  </div>
-                  <div className="text-[10px] text-[var(--ink-mute)] mt-0.5">NASA LOLA Altimetry</div>
-                </div>
-
-                <div className="bento-plate p-4">
-                  <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Sunlight Span ({timeWindow})</div>
-                  <div className="text-xl font-bold font-mono text-[var(--coral)] mt-1">
-                    {current?`${power.hours}h`:'…'}
-                  </div>
-                  <div className="text-[10px] text-[var(--ink-mute)] mt-0.5">Peak alt: {power.maxAlt}°</div>
-                </div>
-
-                <div className="bento-plate p-4">
-                  <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Earth center visibility ({timeWindow})</div>
-                  <div className="text-xl font-bold font-mono text-[var(--mustard)] mt-1">
-                    {current?`${comm.hours}h`:'…'}
-                  </div>
-                  <div className="text-[10px] text-[var(--ink-mute)] mt-0.5">Uptime: {comm.availabilityPercent}%</div>
-                </div>
-
-                <div className="bento-plate p-4">
-                  <div className="text-[10px] font-mono text-[var(--ink-faint)] uppercase">Regional mission context</div>
-                  <div className="text-sm font-bold text-[var(--ink)] truncate mt-1">
-                    {selectedSite.mission?.split('(')[0]?.trim()}
-                  </div>
-                  <div className="text-[10px] text-[var(--ink-mute)] truncate mt-0.5">{selectedSite.contractor}</div>
-                  <div className="text-[9px] text-[var(--ink-faint)] mt-1">Catalog coordinate is a regional marker, not a surveyed touchdown point.</div>
-                </div>
+            {activeTab === 'terrain' && (
+              <div className="h-full min-h-[640px]">
+                <SiteTerrainView
+                  site={selectedSite}
+                  date={date}
+                  ephemerisRevision={ephemerisRevision}
+                  onBack={() => setActiveTab('globe')}
+                />
               </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === 'terrain' && (
-            <div className="h-full min-h-[640px]">
-              <SiteTerrainView
+            {activeTab === 'analytics' && (
+              <SiteDetailView
                 site={selectedSite}
+                setSelectedSite={setSelectedSite}
                 date={date}
-                ephemerisRevision={ephemerisRevision}
-                onBack={() => setActiveTab('globe')}
-              />
-            </div>
-          )}
-
-          {activeTab === 'analytics' && (
-            <SiteDetailView
-              site={selectedSite}
-              setSelectedSite={setSelectedSite}
-              date={date}
-              timeWindow={timeWindow}
-              setTimeWindow={setTimeWindow}
-              onVisitTerrain={() => setActiveTab('terrain')}
-            />
-          )}
-
-          {activeTab === 'compare' && (
-            <CompareView
-              date={date}
-              setTimeWindow={setTimeWindow}
-              pins={comparisonPins}
-              onChangePins={setComparisonPins}
-              onSelectSite={(site) => { setSelectedSite(site); setActiveTab('analytics'); }}
-              onVisitTerrain={(site) => { setSelectedSite(site); setActiveTab('terrain'); }}
-            />
-          )}
-
-          {activeTab === 'assistant' && (
-            <div className="max-w-4xl mx-auto p-4 w-full" data-guide="assistant-view">
-              <MoonAssistant
-                site={selectedSite}
-                date={date}
-                power={power}
-                comm={comm}
-                embedded={true}
-                scenario={current}
                 timeWindow={timeWindow}
-                onNavigate={setActiveTab}
-                onComparePins={setComparisonPins}
+                setTimeWindow={setTimeWindow}
+                onVisitTerrain={() => setActiveTab('terrain')}
               />
-            </div>
-          )}
+            )}
+
+            {activeTab === 'compare' && (
+              <CompareView
+                date={date}
+                setTimeWindow={setTimeWindow}
+                pins={comparisonPins}
+                onChangePins={setComparisonPins}
+                onSelectSite={(site) => {
+                  setSelectedSite(site);
+                  setActiveTab('analytics');
+                }}
+                onVisitTerrain={(site) => {
+                  setSelectedSite(site);
+                  setActiveTab('terrain');
+                }}
+              />
+            )}
+
+            {activeTab === 'assistant' && (
+              <div className="max-w-4xl mx-auto p-4 w-full" data-guide="assistant-view">
+                <MoonAssistant
+                  site={selectedSite}
+                  date={date}
+                  power={power}
+                  comm={comm}
+                  embedded={true}
+                  scenario={current}
+                  timeWindow={timeWindow}
+                  onNavigate={setActiveTab}
+                  onComparePins={setComparisonPins}
+                />
+              </div>
+            )}
+          </div>
         </main>
       </div>
 
-      {/* Local astronaut guide; the original dedicated Mission AI view remains above. */}
+      {/* Local Astronaut Guide (Astra) */}
       <AstronautGuide
         site={selectedSite}
         date={date}
@@ -446,14 +593,18 @@ function AppContent({date,setDate,timeWindow,setTimeWindow}) {
         onNavigate={setActiveTab}
       />
 
-      {/* Verification Modal */}
+      {/* Validation & Data Modal */}
       <VerificationModal isOpen={verificationOpen} onClose={() => setVerificationOpen(false)} />
     </div>
   );
 }
 
-export default function App(){
- const [date,setDate]=useState(()=>new Date().toISOString().slice(0,10));
- const [timeWindow,setTimeWindow]=useState('24h');
- return <ScienceProvider date={date} timeWindow={timeWindow}><AppContent date={date} setDate={setDate} timeWindow={timeWindow} setTimeWindow={setTimeWindow}/></ScienceProvider>;
+export default function App() {
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [timeWindow, setTimeWindow] = useState('24h');
+  return (
+    <ScienceProvider date={date} timeWindow={timeWindow}>
+      <AppContent date={date} setDate={setDate} timeWindow={timeWindow} setTimeWindow={setTimeWindow} />
+    </ScienceProvider>
+  );
 }

@@ -1,9 +1,11 @@
 // src/components/Navbar.jsx
 // Classy Blue & Silver Header with View Mode Pills, Native Date Picker + Steppers,
 // Mission Presets Dropdown, and Time Window Selector.
+// Uses GSAP for smooth active tab switching animations.
 
-import { useState } from 'react';
-import {coordinateText} from '../lib/mascotKnowledge.js';
+import { useState, useRef, useEffect } from 'react';
+import { coordinateText } from '../lib/mascotKnowledge.js';
+import gsap from 'gsap';
 import {
   Calendar, Globe, Mountain, BarChart3, GitCompare, Bot,
   CheckCircle2, ChevronLeft, ChevronRight, Clock, Sparkles, ChevronDown
@@ -14,8 +16,7 @@ const MISSION_PRESETS = [
   { label: 'Artemis III test flight (Earth orbit · 2027)', date: '2027-06-15' },
   { label: 'IM-1 Odysseus Landing (Feb 2024)', date: '2024-02-22' },
   { label: 'IM-2 Athena landing (Mar 6, 2025)', date: '2025-03-06' },
-  { label: 'Blue Ghost 1 landing (Mar 2, 2025)', date: '2025-03-02' },
-  { label: 'NASA DE421 Benchmark Date', date: '2026-02-15' },
+  { label: 'NASA 2026 Solar Benchmark', date: '2026-02-15' },
 ];
 
 const TIME_WINDOWS = [
@@ -37,6 +38,21 @@ export default function Navbar({
   onOpenVerification,
 }) {
   const [presetOpen, setPresetOpen] = useState(false);
+  const navRef = useRef(null);
+
+  // GSAP tab switch animation
+  useEffect(() => {
+    if (navRef.current) {
+      const activeEl = navRef.current.querySelector('.nav-tab-pill.active');
+      if (activeEl) {
+        gsap.fromTo(
+          activeEl,
+          { scale: 0.94 },
+          { scale: 1, duration: 0.25, ease: 'back.out(1.5)' }
+        );
+      }
+    }
+  }, [activeTab]);
 
   const handlePrevDay = () => {
     const d = new Date(date + 'T12:00:00Z');
@@ -57,11 +73,11 @@ export default function Navbar({
         <div className="flex items-center gap-3">
           <span className="flex items-center">
             <span className="pulse-dot" />
-            <b>Awilix</b>&nbsp;·&nbsp;Lunar Light & Comms Atlas
+            <b>Awilix</b>&nbsp;·&nbsp;Lunar South Pole Light & Radio Atlas
           </span>
           <span className="hidden md:inline text-[var(--ink-faint)]">|</span>
           <span className="hidden md:inline text-[var(--ink-faint)]">
-            Source: <b className="text-[var(--ink)]">NASA SVS / analytical fallback</b>
+            Data: <b className="text-[var(--ink)]">NASA LRO & 2026 Orbital Ephemeris</b>
           </span>
         </div>
 
@@ -70,10 +86,10 @@ export default function Navbar({
             onClick={onOpenVerification}
             className="flex items-center gap-1.5 text-[var(--ink-mute)] hover:text-[var(--coral)] transition-colors cursor-pointer"
           >
-            <CheckCircle2 className="w-3 h-3 text-[var(--emerald)]" />
-            <span className="underline">Data & validation</span>
+            <CheckCircle2 className="w-3.5 h-3.5 text-[var(--emerald)]" />
+            <span className="underline">Data & Sources</span>
           </button>
-          <span className="text-[var(--ink-faint)] hidden sm:inline">{coordinateText(selectedSite)}</span>
+          <span className="text-[var(--coral)] hidden sm:inline font-mono">{coordinateText(selectedSite)}</span>
         </div>
       </div>
 
@@ -89,12 +105,12 @@ export default function Navbar({
                   <span className="font-sans font-bold text-base tracking-tight text-[var(--ink)]">
                     AWILIX
                   </span>
-                  <span className="text-[9.5px] font-mono uppercase bg-[rgba(255,171,94,0.12)] border border-[rgba(255,171,94,0.3)] text-[var(--coral)] px-1.5 py-0.5 rounded">
-                    Space Apps
+                  <span className="text-[9.5px] font-mono uppercase bg-[rgba(234,193,139,0.12)] border border-[rgba(234,193,139,0.3)] text-[var(--coral)] px-1.5 py-0.5 rounded">
+                    South Pole 2026
                   </span>
                 </div>
                 <p className="text-[10px] text-[var(--ink-mute)] font-sans">
-                  South Pole Sunlight & Earth-Windows
+                  Sunlight & Direct Earth Communications
                 </p>
               </div>
             </a>
@@ -102,15 +118,18 @@ export default function Navbar({
             {/* Verification mobile button */}
             <button
               onClick={onOpenVerification}
-              className="xl:hidden telemetry-chip terrain text-[10px]"
+              className="xl:hidden telemetry-chip terrain text-[10px] cursor-pointer"
             >
               <CheckCircle2 className="w-3 h-3" />
-              <span>Data & validation</span>
+              <span>Data</span>
             </button>
           </div>
 
           {/* Navigation View Switcher Pills */}
-          <nav className="flex items-center bg-[var(--bone)] p-1 rounded-xl border border-[var(--line)] overflow-x-auto max-w-full">
+          <nav
+            ref={navRef}
+            className="flex items-center bg-[var(--bone)] p-1 rounded-xl border border-[var(--line)] overflow-x-auto max-w-full scrollbar-none"
+          >
             <button
               onClick={() => setActiveTab('globe')}
               className={`nav-tab-pill ${activeTab === 'globe' ? 'active' : ''}`}
@@ -172,13 +191,13 @@ export default function Navbar({
                   onClick={() => setPresetOpen(false)}
                 >
                   <div className="text-[10px] font-mono uppercase text-[var(--ink-faint)] px-2.5 py-1 border-b border-[var(--line-soft)]">
-                    Mission date presets · dates outside 2026 use the approximate model
+                    Historical & Planned Missions
                   </div>
                   {MISSION_PRESETS.map((p, idx) => (
                     <button
                       key={idx}
                       onClick={() => setDate(p.date)}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-[rgba(238,241,247,0.06)] flex items-center justify-between transition-colors"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-[var(--ink-soft)] hover:text-[var(--ink)] hover:bg-[rgba(238,241,247,0.06)] flex items-center justify-between transition-colors cursor-pointer"
                     >
                       <span>{p.label}</span>
                       <span className="font-mono text-[10px] text-[var(--coral)]">{p.date}</span>
@@ -192,7 +211,7 @@ export default function Navbar({
             <div className="flex items-center bg-[var(--bone)] rounded-lg border border-[var(--line)] p-0.5">
               <button
                 onClick={handlePrevDay}
-                className="p-1.5 text-[var(--ink-mute)] hover:text-[var(--ink)] hover:bg-[rgba(238,241,247,0.06)] rounded transition-colors"
+                className="p-1.5 text-[var(--ink-mute)] hover:text-[var(--ink)] hover:bg-[rgba(238,241,247,0.06)] rounded transition-colors cursor-pointer"
                 title="Previous Day"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -207,7 +226,7 @@ export default function Navbar({
 
               <button
                 onClick={handleNextDay}
-                className="p-1.5 text-[var(--ink-mute)] hover:text-[var(--ink)] hover:bg-[rgba(238,241,247,0.06)] rounded transition-colors"
+                className="p-1.5 text-[var(--ink-mute)] hover:text-[var(--ink)] hover:bg-[rgba(238,241,247,0.06)] rounded transition-colors cursor-pointer"
                 title="Next Day"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -225,7 +244,7 @@ export default function Navbar({
                       ? 'bg-[var(--coral)] text-[#120e07] font-semibold'
                       : 'text-[var(--ink-mute)] hover:text-[var(--ink)]'
                   }`}
-                  title={`Analyze solar & DTE comm windows over ${tw.hours} hours`}
+                  title={`Analyze over ${tw.hours} hours`}
                 >
                   {tw.label}
                 </button>

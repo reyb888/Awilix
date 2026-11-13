@@ -408,9 +408,9 @@ body::before {
 .site-item-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 10px;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 9px;
   width: 100%;
   text-align: left;
   background: transparent;
@@ -434,12 +434,34 @@ body::before {
   box-shadow: 0 0 10px var(--coral);
 }
 .site-beacon-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--ink-faint);
   flex-shrink: 0;
   transition: background-color 0.16s ease;
+}
+
+/* Subtle modern scrollbar */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+aside *::-webkit-scrollbar {
+  width: 4px;
+}
+aside *::-webkit-scrollbar-track {
+  background: transparent;
+}
+aside *::-webkit-scrollbar-thumb {
+  background: rgba(238, 241, 247, 0.15);
+  border-radius: 999px;
+}
+aside *::-webkit-scrollbar-thumb:hover {
+  background: var(--coral);
 }
 
 /* ── Custom Range Slider ─────────────────────────── */
