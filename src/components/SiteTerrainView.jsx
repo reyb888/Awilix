@@ -109,9 +109,9 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
       ambientLightRef.current.intensity = 2.4;
       ambientLightRef.current.color.setHex(0xffffff);
     } else {
-      // Physical Solar Lighting: deep lunar shadows
-      ambientLightRef.current.intensity = 0.35;
-      ambientLightRef.current.color.setHex(0x0a1020);
+      // Physical Solar Lighting: deep lunar shadows with earthshine fill so terrain is always clearly legible
+      ambientLightRef.current.intensity = 0.9;
+      ambientLightRef.current.color.setHex(0x283848);
     }
   }, [lightingMode]);
 
@@ -235,23 +235,24 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
     controls.target.set(0, 0, 0);
     controlsRef.current = controls;
 
-    // AMBIENT LIGHT
-    const ambientLight = new THREE.AmbientLight(0x0a1020, 0.35);
+    // AMBIENT LIGHT (Realistic lunar earthshine & secondary sky bounce)
+    const ambientLight = new THREE.AmbientLight(0x283848, 0.9);
     scene.add(ambientLight);
     ambientLightRef.current = ambientLight;
 
-    // DIRECTIONAL SUN LIGHT (PHYSICAL SHADOW ENGINE — 100% UNTOUCHED)
+    // DIRECTIONAL SUN LIGHT (PHYSICAL SHADOW ENGINE)
     const sunLight = new THREE.DirectionalLight(0xfffbf2, 3.2);
     sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 4096;
-    sunLight.shadow.mapSize.height = 4096;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
     sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 80;
-    sunLight.shadow.camera.left = -9;
-    sunLight.shadow.camera.right = 9;
-    sunLight.shadow.camera.top = 9;
-    sunLight.shadow.camera.bottom = -9;
-    sunLight.shadow.bias = -0.0004;
+    sunLight.shadow.camera.far = 100;
+    sunLight.shadow.camera.left = -12;
+    sunLight.shadow.camera.right = 12;
+    sunLight.shadow.camera.top = 12;
+    sunLight.shadow.camera.bottom = -12;
+    sunLight.shadow.bias = -0.0001;
+    sunLight.shadow.normalBias = 0.04;
     scene.add(sunLight);
     sunLightRef.current = sunLight;
 
@@ -313,17 +314,26 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
 
     updateLighting();
 
-    // COMPASS ROSE (North / East pointers on ground)
+    // COMPASS ROSE (North / East pointers on ground, Red = North, Cyan = East)
     const compassGroup = new THREE.Group();
     const northArrow = new THREE.ArrowHelper(
       new THREE.Vector3(0, 0, -1),
-      new THREE.Vector3(0, 0.01, 0),
-      2.0,
+      new THREE.Vector3(0, 0.02, 0),
+      2.5,
       0xef4444,
+      0.5,
+      0.25
+    );
+    const eastArrow = new THREE.ArrowHelper(
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, 0.02, 0),
+      1.8,
+      0x91c6d4,
       0.4,
       0.2
     );
     compassGroup.add(northArrow);
+    compassGroup.add(eastArrow);
     scene.add(compassGroup);
 
     // ANIMATION LOOP
@@ -341,14 +351,23 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
     animate();
 
     const handleResize = () => {
-      if (!container) return;
-      camera.aspect = container.clientWidth / container.clientHeight;
+      if (!container || !renderer || !camera) return;
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      if (width === 0 || height === 0) return;
+      camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setSize(width, height);
     };
+
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+    resizeObserver.observe(container);
     window.addEventListener('resize', handleResize);
 
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animFrameRef.current);
       controls.dispose();
@@ -375,40 +394,124 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
       terrainMeshRef.current = null;
     }
 
-    if(terrainData.id!==site.id)return;
-    const sourceSize=terrainData.gridSize,gridSize=useInterpolation?256:sourceSize;
-    const geometry=new THREE.PlaneGeometry(1,1,gridSize-1,gridSize-1),posAttr=geometry.attributes.position;
-    const center=sampleTerrain(terrainData,0,0)??terrainData.minElevationM;
-    const valid=new Uint8Array(gridSize*gridSize),colors=new Float32Array(gridSize*gridSize*3);
-    for(let y=0;y<gridSize;y++)for(let x=0;x<gridSize;x++){
-      const idx=y*gridSize+x,gx=x/(gridSize-1)*(sourceSize-1),gy=y/(gridSize-1)*(sourceSize-1);
-      const z=useInterpolation?bilinearGrid(terrainData.rawElev,sourceSize,gx,gy):terrainData.rawElev[y*sourceSize+x];
-      const enu=gridToENU(terrainData,gx,gy);valid[idx]=Number.isFinite(z)?1:0;
-      const physical=(Number.isFinite(z)?z:center)-center-(enu.east**2+enu.north**2)/(2*1737400);
-      posAttr.setXYZ(idx,enu.east/1000,enu.north/1000,physical/1000*exaggeration);
-      let t=Number.isFinite(z)?(z-terrainData.minElevationM)/(terrainData.elevationSpanM||1):0;
-      if(surfaceMode==='slope'){
-        const a=bilinearGrid(terrainData.rawElev,sourceSize,Math.max(0,gx-1),gy),b=bilinearGrid(terrainData.rawElev,sourceSize,Math.min(sourceSize-1,gx+1),gy),c=bilinearGrid(terrainData.rawElev,sourceSize,gx,Math.max(0,gy-1)),d=bilinearGrid(terrainData.rawElev,sourceSize,gx,Math.min(sourceSize-1,gy+1));
-        if([a,b,c,d].every(Number.isFinite)){const dx=(b-a)/((Math.min(sourceSize-1,gx+1)-Math.max(0,gx-1))*terrainData.spacingXM),dy=(d-c)/((Math.min(sourceSize-1,gy+1)-Math.max(0,gy-1))*terrainData.spacingYM);t=Math.min(1,Math.atan(Math.hypot(dx,dy))*180/Math.PI/30);}else t=0;
+    if (terrainData.id !== site.id) return;
+    const sourceSize = terrainData.gridSize;
+    // Keep grid lightweight and snappy (native LOLA 128x128 grid)
+    const gridSize = sourceSize;
+    const geometry = new THREE.PlaneGeometry(1, 1, gridSize - 1, gridSize - 1);
+    const posAttr = geometry.attributes.position;
+    const center = sampleTerrain(terrainData, 0, 0) ?? terrainData.minElevationM;
+    const valid = new Uint8Array(gridSize * gridSize);
+    const colors = new Float32Array(gridSize * gridSize * 3);
+
+    for (let y = 0; y < gridSize; y++) {
+      for (let x = 0; x < gridSize; x++) {
+        const idx = y * gridSize + x;
+        const gx = (x / (gridSize - 1)) * (sourceSize - 1);
+        const gy = (y / (gridSize - 1)) * (sourceSize - 1);
+        const z = useInterpolation
+          ? bilinearGrid(terrainData.rawElev, sourceSize, gx, gy)
+          : terrainData.rawElev[y * sourceSize + x];
+        const enu = gridToENU(terrainData, gx, gy);
+        valid[idx] = Number.isFinite(z) ? 1 : 0;
+        const physical = (Number.isFinite(z) ? z : center) - center - (enu.east ** 2 + enu.north ** 2) / (2 * 1737400);
+        posAttr.setXYZ(idx, enu.east / 1000, enu.north / 1000, (physical / 1000) * exaggeration);
+
+        let t = Number.isFinite(z) ? (z - terrainData.minElevationM) / (terrainData.elevationSpanM || 1) : 0;
+        if (surfaceMode === 'slope') {
+          const a = bilinearGrid(terrainData.rawElev, sourceSize, Math.max(0, gx - 1), gy);
+          const b = bilinearGrid(terrainData.rawElev, sourceSize, Math.min(sourceSize - 1, gx + 1), gy);
+          const c = bilinearGrid(terrainData.rawElev, sourceSize, gx, Math.max(0, gy - 1));
+          const d = bilinearGrid(terrainData.rawElev, sourceSize, gx, Math.min(sourceSize - 1, gy + 1));
+          if ([a, b, c, d].every(Number.isFinite)) {
+            const dx = (b - a) / ((Math.min(sourceSize - 1, gx + 1) - Math.max(0, gx - 1)) * terrainData.spacingXM);
+            const dy = (d - c) / ((Math.min(sourceSize - 1, gy + 1) - Math.max(0, gy - 1)) * terrainData.spacingYM);
+            t = Math.min(1, (Math.atan(Math.hypot(dx, dy)) * 180) / Math.PI / 30);
+          } else {
+            t = 0;
+          }
+        }
+        // Crisp authentic lunar palette: deep basalt regolith (#22303c) to bright anorthosite peak (#f0ebe1)
+        const color = new THREE.Color().lerpColors(
+          new THREE.Color(surfaceMode === 'slope' ? '#7fbdca' : '#22303c'),
+          new THREE.Color(surfaceMode === 'slope' ? '#e39d75' : '#f0ebe1'),
+          Math.max(0, Math.min(1, t))
+        );
+        colors.set([color.r, color.g, color.b], idx * 3);
       }
-      const color=new THREE.Color().lerpColors(new THREE.Color(surfaceMode==='slope'?'#7fbdca':'#364b5d'),new THREE.Color(surfaceMode==='slope'?'#e39d75':'#ead5ac'),Math.max(0,Math.min(1,t)));
-      colors.set([color.r,color.g,color.b],idx*3);
     }
+
     // Missing elevation is a hole, never an artificial zero-height wall.
-    const indices=geometry.index.array,kept=[];
-    for(let i=0;i<indices.length;i+=3)if(valid[indices[i]]&&valid[indices[i+1]]&&valid[indices[i+2]])kept.push(indices[i],indices[i+1],indices[i+2]);
-    geometry.setIndex(kept);geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));geometry.computeVertexNormals();
-    const textureMap=surfaceMode==='texture'?new THREE.TextureLoader().load(terrainData.textureUrl):null;
-    if(textureMap)textureMap.colorSpace=THREE.SRGBColorSpace;
-    const material=new THREE.MeshStandardMaterial({map:textureMap,vertexColors:!textureMap,roughness:.92,metalness:.02,wireframe,flatShading:!useInterpolation,side:THREE.DoubleSide});
-    const mesh=new THREE.Mesh(geometry,material);mesh.rotation.x=-Math.PI/2;mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);terrainMeshRef.current=mesh;
-    const lander=new THREE.Group();lander.rotation.x=Math.PI/2;
-    lander.add(new THREE.Mesh(new THREE.CylinderGeometry(.08,.12,.08,8),new THREE.MeshStandardMaterial({color:0xeac18b})));
-    const antenna=new THREE.Mesh(new THREE.CylinderGeometry(.01,.01,.25,8),new THREE.MeshBasicMaterial({color:0x91c6d4}));antenna.position.y=.125;lander.add(antenna);lander.position.set(0,0,.04);mesh.add(lander);
-    const extent=Math.max(terrainData.widthKm,terrainData.heightKm);
-    controlsRef.current.maxDistance=extent*8;
-    if(cameraRef.current.userData.siteId!==site.id){cameraRef.current.position.set(0,extent*.6,extent*.9);controlsRef.current.target.set(0,0,0);cameraRef.current.userData.siteId=site.id;}
-    return()=>{scene.remove(mesh);if(terrainMeshRef.current===mesh)terrainMeshRef.current=null;mesh.traverse(o=>{o.geometry?.dispose();if(o.material){o.material.map?.dispose();o.material.dispose();}});};
+    const indices = geometry.index.array;
+    const kept = [];
+    for (let i = 0; i < indices.length; i += 3) {
+      if (valid[indices[i]] && valid[indices[i + 1]] && valid[indices[i + 2]]) {
+        kept.push(indices[i], indices[i + 1], indices[i + 2]);
+      }
+    }
+    geometry.setIndex(kept);
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.computeVertexNormals();
+
+    const textureMap = surfaceMode === 'texture' ? new THREE.TextureLoader().load(terrainData.textureUrl) : null;
+    if (textureMap) textureMap.colorSpace = THREE.SRGBColorSpace;
+
+    const material = new THREE.MeshStandardMaterial({
+      map: textureMap,
+      vertexColors: !textureMap,
+      roughness: 0.88,
+      metalness: 0.04,
+      wireframe,
+      flatShading: !useInterpolation,
+      side: THREE.DoubleSide,
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    terrainMeshRef.current = mesh;
+
+    // LANDER MODEL WITH GLOWING TARGET BEACON AT (0,0)
+    const lander = new THREE.Group();
+    lander.rotation.x = Math.PI / 2;
+    lander.add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.08, 8), new THREE.MeshStandardMaterial({ color: 0xeac18b, metalness: 0.3, roughness: 0.6 })));
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.25, 8), new THREE.MeshBasicMaterial({ color: 0x91c6d4 }));
+    antenna.position.y = 0.125;
+    lander.add(antenna);
+
+    // Glowing target ring around lander base
+    const targetRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.2, 0.26, 24),
+      new THREE.MeshBasicMaterial({ color: 0xeac18b, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+    );
+    targetRing.rotation.x = -Math.PI / 2;
+    lander.add(targetRing);
+
+    lander.position.set(0, 0, 0.04);
+    mesh.add(lander);
+
+    const extent = Math.max(terrainData.widthKm, terrainData.heightKm);
+    controlsRef.current.maxDistance = extent * 8;
+    if (cameraRef.current.userData.siteId !== site.id) {
+      cameraRef.current.position.set(extent * 0.55, extent * 0.55, extent * 0.75);
+      controlsRef.current.target.set(0, 0, 0);
+      controlsRef.current.update();
+      cameraRef.current.userData.siteId = site.id;
+    }
+
+    return () => {
+      scene.remove(mesh);
+      if (terrainMeshRef.current === mesh) terrainMeshRef.current = null;
+      mesh.traverse((o) => {
+        o.geometry?.dispose();
+        if (o.material) {
+          o.material.map?.dispose();
+          o.material.dispose();
+        }
+      });
+    };
   }, [terrainData, useInterpolation, wireframe, exaggeration, surfaceMode, site.id]);
 
 
@@ -446,7 +549,7 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
       )}
 
       {/* ── Top Unified Controls Bar ─────────────────── */}
-      <div className="absolute top-3 inset-x-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+      <div className="absolute top-4 left-4 right-4 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
         {/* Top Left: Back Button & Site Identity */}
         <div className="flex items-center gap-2 pointer-events-auto">
           <button
@@ -581,8 +684,9 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
                 className="btn-ghost text-xs py-1 px-3 cursor-pointer"
                 onClick={() => {
                   const extent = Math.max(terrainData?.widthKm ?? 10, terrainData?.heightKm ?? 10);
-                  cameraRef.current.position.set(0, extent * 0.6, extent * 0.9);
+                  cameraRef.current.position.set(extent * 0.55, extent * 0.55, extent * 0.75);
                   controlsRef.current.target.set(0, 0, 0);
+                  controlsRef.current.update();
                 }}
               >
                 Reset Camera
