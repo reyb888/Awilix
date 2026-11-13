@@ -22,6 +22,71 @@ import {
 const terrainDataCache = new Map();
 const terrainPromiseCache = new Map();
 
+// Display-only contrast stretch keeps the grayscale inspection rasters
+// legible across sites whose baked textures have different source ranges.
+// It changes no elevation samples or scientific calculations.
+function normalizeInspectionTexture(sourceTexture) {
+  try {
+    const image = sourceTexture.image;
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width || image.naturalWidth;
+    canvas.height = image.height || image.naturalHeight;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!canvas.width || !canvas.height || !context) return sourceTexture;
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    const histogram = new Uint32Array(256);
+    let validCount = 0;
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      if (pixels.data[i + 3] === 0) continue;
+      const luminance = Math.round(
+        0.2126 * pixels.data[i] + 0.7152 * pixels.data[i + 1] + 0.0722 * pixels.data[i + 2]
+      );
+      histogram[luminance] += 1;
+      validCount += 1;
+    }
+    if (!validCount) return sourceTexture;
+
+    const percentile = (fraction) => {
+      const target = Math.ceil(validCount * fraction);
+      let total = 0;
+      for (let value = 0; value < histogram.length; value += 1) {
+        total += histogram[value];
+        if (total >= target) return value;
+      }
+      return 255;
+    };
+    const low = percentile(0.02);
+    const high = percentile(0.98);
+    const span = Math.max(1, high - low);
+
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      if (pixels.data[i + 3] === 0) continue;
+      const luminance = Math.round(
+        0.2126 * pixels.data[i] + 0.7152 * pixels.data[i + 1] + 0.0722 * pixels.data[i + 2]
+      );
+      const stretched = Math.max(12, Math.min(244, 12 + ((luminance - low) / span) * 232));
+      pixels.data[i] = stretched;
+      pixels.data[i + 1] = stretched;
+      pixels.data[i + 2] = stretched;
+    }
+    context.putImageData(pixels, 0, 0);
+
+    const displayTexture = new THREE.CanvasTexture(canvas);
+    displayTexture.colorSpace = THREE.SRGBColorSpace;
+    displayTexture.anisotropy = 4;
+    displayTexture.generateMipmaps = true;
+    displayTexture.minFilter = THREE.LinearMipmapLinearFilter;
+    displayTexture.magFilter = THREE.LinearFilter;
+    sourceTexture.dispose();
+    return displayTexture;
+  } catch {
+    // Keep the source imagery available if a browser blocks canvas access.
+    return sourceTexture;
+  }
+}
+
 export default function SiteTerrainView({ site, date, onBack, ephemerisRevision }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
@@ -44,6 +109,7 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
   const [wireframe, setWireframe] = useState(false);
   const [terrainData, setTerrainData] = useState(() => terrainDataCache.get(site.id) || null);
   const [loading, setLoading] = useState(() => !terrainDataCache.has(site.id));
+  const [renderReady, setRenderReady] = useState(false);
   const [telemetry, setTelemetry] = useState(null);
   const [exaggeration, setExaggeration] = useState(1.0); // 1.0 = Real 1:1 Physical Aspect Ratio
   const [surfaceMode, setSurfaceMode] = useState('elevation');
@@ -52,6 +118,7 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
 
   useEffect(() => {
     let alive = true;
+    setRenderReady(false);
     setTerrainError(null);
 
     const cached = terrainDataCache.get(site.id);
@@ -386,6 +453,14 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !terrainData) return;
+    let cancelled = false;
+    let readyFrame = 0;
+    const markReadyAfterFrame = () => {
+      cancelAnimationFrame(readyFrame);
+      readyFrame = requestAnimationFrame(() => {
+        if (!cancelled) setRenderReady(true);
+      });
+    };
 
     if (terrainMeshRef.current) {
       scene.remove(terrainMeshRef.current);
@@ -454,32 +529,67 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
     geometry.computeVertexNormals();
 
     // Lighting inspection uses the bundled 20 m/pixel raster texture. The
-    // elevation grid remains at its native source resolution (80 m/pixel for
-    // polar crops); the finer image is not a higher-resolution DEM.
+    // elevation grid remains at its native source resolution; image pixels
+    // do not add elevation detail.
     const textureUrl = lightingMode
       ? `/terrain/${site.id}_texture_20mpp.png`
       : surfaceMode === 'texture'
         ? terrainData.textureUrl
         : null;
-    const textureMap = textureUrl ? new THREE.TextureLoader().load(textureUrl) : null;
-    if (textureMap) textureMap.colorSpace = THREE.SRGBColorSpace;
-
-    const material = new THREE.MeshStandardMaterial({
-      map: textureMap,
-      vertexColors: !textureMap,
-      roughness: 0.88,
-      metalness: 0.04,
-      wireframe,
-      flatShading: !useInterpolation,
-      side: THREE.DoubleSide,
-    });
+    // Inspection mode is deliberately unlit: it shows the baked image with
+    // one consistent contrast treatment and cannot acquire a false cast shadow.
+    const material = lightingMode
+      ? new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          vertexColors: !textureUrl,
+          wireframe,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+        })
+      : new THREE.MeshStandardMaterial({
+          vertexColors: !textureUrl,
+          roughness: 0.88,
+          metalness: 0.04,
+          wireframe,
+          flatShading: !useInterpolation,
+          side: THREE.DoubleSide,
+        });
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.rotation.x = -Math.PI / 2;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = !lightingMode;
+    mesh.receiveShadow = !lightingMode;
     scene.add(mesh);
     terrainMeshRef.current = mesh;
+
+    if (textureUrl) {
+      new THREE.TextureLoader().load(
+        textureUrl,
+        (sourceTexture) => {
+          if (cancelled) {
+            sourceTexture.dispose();
+            return;
+          }
+          const texture = lightingMode ? normalizeInspectionTexture(sourceTexture) : sourceTexture;
+          texture.colorSpace = THREE.SRGBColorSpace;
+          material.map = texture;
+          material.vertexColors = false;
+          material.needsUpdate = true;
+          markReadyAfterFrame();
+        },
+        undefined,
+        () => {
+          if (cancelled) return;
+          material.map = null;
+          material.vertexColors = true;
+          material.needsUpdate = true;
+          setTerrainError('Terrain image could not load; showing elevation colors');
+          markReadyAfterFrame();
+        }
+      );
+    } else {
+      markReadyAfterFrame();
+    }
 
     // LANDER MODEL WITH GLOWING TARGET BEACON AT (0,0)
     const lander = new THREE.Group();
@@ -510,6 +620,8 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
     }
 
     return () => {
+      cancelled = true;
+      cancelAnimationFrame(readyFrame);
       scene.remove(mesh);
       if (terrainMeshRef.current === mesh) terrainMeshRef.current = null;
       mesh.traverse((o) => {
@@ -529,8 +641,8 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
       <div ref={containerRef} className="w-full flex-1 relative cursor-grab active:cursor-grabbing" />
 
       {/* High-Tech NASA Altimetry Acquisition HUD Overlay */}
-      {loading && (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#060910]/85 backdrop-blur-md animate-fade-in pointer-events-none">
+      {(loading || (!terrainError && !renderReady)) && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#060910]/95 backdrop-blur-md animate-fade-in pointer-events-none">
           <div className="relative mb-3">
             <div className="w-12 h-12 rounded-full border-2 border-[var(--coral)] border-t-transparent animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center text-[10px] font-mono text-[var(--coral)] font-bold">
@@ -538,14 +650,14 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
             </div>
           </div>
           <div className="text-xs font-mono font-bold text-[var(--ink)] tracking-widest uppercase">
-            Loading masked terrain crop
+            {loading ? 'Loading terrain data' : 'Preparing 3D terrain'}
           </div>
           <div className="text-[11px] font-mono text-[var(--mustard)] mt-1 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[var(--laser-crimson)] animate-ping" />
             <span>{site.name} · ({coordinateText(site)})</span>
           </div>
           <div className="text-[10px] font-mono text-[var(--ink-faint)] mt-1.5">
-            Source resolution and registration are shown in Data & accuracy
+            Waiting for terrain mesh and imagery to render
           </div>
         </div>
       )}
@@ -579,13 +691,16 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
         <div className="flex items-center gap-2 pointer-events-auto" data-guide="terrain-controls">
           {/* LIGHTING BUTTON (Inspection fill) */}
           <button
-            onClick={() => setLightingMode(!lightingMode)}
+            onClick={() => {
+              setRenderReady(false);
+              setLightingMode((value) => !value);
+            }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all cursor-pointer ${
               lightingMode
                 ? 'bg-[var(--coral)] text-[var(--paper-dark)] border-[var(--coral)] shadow-lg shadow-[rgba(255,171,94,0.25)]'
                 : 'btn-ghost bg-[var(--paper-warm)]/90 text-[var(--ink-soft)]'
             }`}
-            title="Lights up all terrain features so you can view permanently shadowed crater floors clearly"
+            title="View the 20 m/pixel inspection image with shadows disabled; elevation remains at native sampling"
           >
             <Lightbulb className={`w-3.5 h-3.5 ${lightingMode ? 'text-[var(--paper-dark)] fill-current' : 'text-[var(--coral)]'}`} />
             <span>{lightingMode ? 'Lighting: ON' : 'Lighting: OFF'}</span>
@@ -671,7 +786,7 @@ export default function SiteTerrainView({ site, date, onBack, ephemerisRevision 
             </label>
             {lightingMode && (
               <p className="text-[10px] text-[var(--ink-faint)]">
-                Lighting uses 20 m/pixel imagery; elevation remains 80 m/pixel.
+                20 m/pixel image contrast is stretched per crop for viewing; elevation remains at native resolution.
               </p>
             )}
 
